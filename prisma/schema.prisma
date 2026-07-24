@@ -1,0 +1,154 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id                 String       @id @default(cuid())
+  fullName           String
+  email              String       @unique
+  phone              String?
+  passwordHash       String
+  role               String       @default("USER") // "ADMIN" | "USER"
+  status             String       @default("active") // "active" | "inactive"
+  profileImage       String?
+  currency           String       @default("INR")
+  theme              String       @default("light")
+  mustChangePassword Boolean      @default(false)
+  lastLogin          DateTime?
+  emailVerified      DateTime?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  expenses           Expense[]
+  incomes            Income[]
+  investments        Investment[]
+  accounts           Account[]
+  categories         Category[]
+  budgets            Budget[]
+  settings           Settings[]
+  auditLogs          AuditLog[]
+}
+
+model AuditLog {
+  id                String   @id @default(cuid())
+  action            String
+  details           String
+  performedByUserId String?
+  performedByName   String?
+  createdAt         DateTime @default(now())
+  user              User?    @relation(fields: [performedByUserId], references: [id])
+}
+
+model Expense {
+  id            String    @id @default(cuid())
+  userId        String?
+  user          User?     @relation(fields: [userId], references: [id])
+  amount        Float
+  categoryId    String
+  category      Category  @relation(fields: [categoryId], references: [id])
+  accountId     String?
+  account       Account?  @relation(fields: [accountId], references: [id])
+  expenseDate   DateTime
+  expenseTime   String
+  paymentMethod String
+  notes         String?
+  merchant      String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Income {
+  id          String    @id @default(cuid())
+  userId      String?
+  user        User?     @relation(fields: [userId], references: [id])
+  amount      Float
+  source      String
+  description String?
+  incomeDate  DateTime
+  accountId   String?
+  account     Account?  @relation(fields: [accountId], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Category {
+  id        String    @id @default(cuid())
+  userId    String?
+  user      User?     @relation(fields: [userId], references: [id])
+  name      String    @unique
+  icon      String    @default("Tag")
+  color     String    @default("#3b82f6")
+  enabled   Boolean   @default(true)
+  isDefault Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  expenses  Expense[]
+}
+
+model Account {
+  id             String       @id @default(cuid())
+  userId         String?
+  user           User?        @relation(fields: [userId], references: [id])
+  name           String
+  type           String       @default("bank")
+  balance        Float        @default(0)
+  openingBalance Float        @default(0)
+  currency       String       @default("INR")
+  status         String       @default("active")
+  color          String       @default("#3b82f6")
+  icon           String       @default("Wallet")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt @default(now())
+  expenses       Expense[]
+  incomes        Income[]
+  investments    Investment[]
+}
+
+model Investment {
+  id             String    @id @default(cuid())
+  userId         String?
+  user           User?     @relation(fields: [userId], references: [id])
+  investmentType String
+  investmentName String
+  broker         String?
+  accountId      String?
+  account        Account?  @relation(fields: [accountId], references: [id])
+  investmentDate DateTime
+  amount         Float
+  units          Float?
+  purchasePrice  Float?
+  currentPrice   Float?
+  currentValue   Float
+  brokerCharges  Float?    @default(0)
+  tax            Float?    @default(0)
+  notes          String?
+  tags           String?
+  status         String    @default("active")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model Budget {
+  id           String   @id @default(cuid())
+  userId       String?
+  user         User?    @relation(fields: [userId], references: [id])
+  dailyLimit   Float?
+  weeklyLimit  Float?
+  monthlyLimit Float?
+  createdAt    DateTime @default(now())
+}
+
+model Settings {
+  id                   String  @id @default(cuid())
+  userId               String?
+  user                 User?   @relation(fields: [userId], references: [id])
+  currency             String  @default("INR")
+  currencySymbol       String  @default("₹")
+  theme                String  @default("system")
+  dateFormat           String  @default("DD/MM/YYYY")
+  timeFormat           String  @default("12h")
+  defaultPaymentMethod String  @default("UPI")
+}
