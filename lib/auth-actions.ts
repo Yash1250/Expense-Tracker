@@ -25,8 +25,14 @@ export async function loginAction(formData: { email: string; password: string; r
 
   let user: any = null;
   try {
-    const rawUsers: any[] = await prisma.$queryRawUnsafe(`SELECT * FROM "User" WHERE LOWER("email") = ? LIMIT 1`, email);
-    user = rawUsers[0];
+    user = await prisma.user.findFirst({
+      where: {
+        email: {
+          equals: email,
+          mode: 'insensitive',
+        },
+      },
+    });
   } catch {
     user = await prisma.user.findUnique({ where: { email } });
   }
@@ -51,7 +57,10 @@ export async function loginAction(formData: { email: string; password: string; r
 
   // Update last login timestamp
   try {
-    await prisma.$executeRawUnsafe(`UPDATE "User" SET "lastLogin" = CURRENT_TIMESTAMP WHERE "id" = ?`, user.id);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { lastLogin: new Date() },
+    });
   } catch {}
 
   const sessionPayload = {
@@ -104,10 +113,9 @@ export async function changePasswordAction(formData: { oldPassword?: string; new
 
   let user: any = null;
   try {
-    const rawUsers: any[] = await prisma.$queryRawUnsafe(`SELECT * FROM "User" WHERE "id" = ? LIMIT 1`, session.id);
-    user = rawUsers[0];
-  } catch {
     user = await prisma.user.findUnique({ where: { id: session.id } });
+  } catch {
+    return { success: false, error: 'User not found.' };
   }
 
   if (!user) {
@@ -123,16 +131,12 @@ export async function changePasswordAction(formData: { oldPassword?: string; new
 
   const newHash = await hashPassword(formData.newPassword);
   try {
-    await prisma.$executeRawUnsafe(
-      `UPDATE "User" SET "passwordHash" = ?, "mustChangePassword" = 0, "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = ?`,
-      newHash,
-      session.id
-    );
-  } catch {
     await prisma.user.update({
       where: { id: session.id },
       data: { passwordHash: newHash, mustChangePassword: false },
     });
+  } catch {
+    return { success: false, error: 'Failed to update password.' };
   }
 
   // Update session cookie with mustChangePassword = false

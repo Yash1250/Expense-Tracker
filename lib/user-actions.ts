@@ -12,8 +12,6 @@ export async function getUsers(query?: string, roleFilter?: string, statusFilter
 
   let users: any[] = [];
   try {
-    users = await prisma.$queryRawUnsafe(`SELECT "id", "fullName", "email", "phone", "role", "status", "currency", "profileImage", "lastLogin", "createdAt", "updatedAt" FROM "User" ORDER BY "createdAt" DESC`);
-  } catch {
     users = await prisma.user.findMany({
       select: {
         id: true,
@@ -30,6 +28,9 @@ export async function getUsers(query?: string, roleFilter?: string, statusFilter
       },
       orderBy: { createdAt: 'desc' },
     });
+  } catch (e) {
+    console.error('Failed to fetch users:', e);
+    users = [];
   }
 
   let filtered = users;
@@ -76,10 +77,9 @@ export async function createUser(data: {
   // Check unique email
   let existing: any = null;
   try {
-    const raw: any[] = await prisma.$queryRawUnsafe(`SELECT "id" FROM "User" WHERE LOWER("email") = ? LIMIT 1`, email);
-    existing = raw[0];
-  } catch {
     existing = await prisma.user.findUnique({ where: { email } });
+  } catch {
+    existing = null;
   }
 
   if (existing) {
@@ -90,18 +90,6 @@ export async function createUser(data: {
   const userId = 'usr_' + Math.random().toString(36).substring(2, 11);
 
   try {
-    await prisma.$executeRawUnsafe(
-      `INSERT INTO "User" ("id", "fullName", "email", "phone", "passwordHash", "role", "status", "currency", "mustChangePassword", "createdAt", "updatedAt") VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-      userId,
-      data.fullName.trim(),
-      email,
-      data.phone?.trim() || null,
-      passwordHash,
-      data.role || 'USER',
-      data.status || 'active',
-      data.currency || 'INR'
-    );
-  } catch {
     await prisma.user.create({
       data: {
         id: userId,
@@ -115,9 +103,12 @@ export async function createUser(data: {
         mustChangePassword: true,
       },
     });
+  } catch (e) {
+    console.error('Failed to create user:', e);
+    return { success: false, error: 'Failed to create user account.' };
   }
 
-  await createAuditLog('User Created', `Admin created new user ${email} (${data.role})`);
+  await createAuditLog('User Created', `Admin created new user account: ${email}`);
   revalidatePath('/users');
   return { success: true };
 }
@@ -140,17 +131,6 @@ export async function updateUser(
 
   const email = data.email.trim().toLowerCase();
   try {
-    await prisma.$executeRawUnsafe(
-      `UPDATE "User" SET "fullName" = ?, "email" = ?, "phone" = ?, "role" = ?, "status" = ?, "currency" = ?, "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = ?`,
-      data.fullName.trim(),
-      email,
-      data.phone?.trim() || null,
-      data.role,
-      data.status,
-      data.currency || 'INR',
-      id
-    );
-  } catch {
     await prisma.user.update({
       where: { id },
       data: {
@@ -162,6 +142,9 @@ export async function updateUser(
         currency: data.currency || 'INR',
       },
     });
+  } catch (e) {
+    console.error('Failed to update user:', e);
+    return { success: false, error: 'Failed to update user account.' };
   }
 
   await createAuditLog('User Updated', `Admin updated user details for ${email}`);
@@ -180,9 +163,13 @@ export async function toggleUserStatus(id: string, status: string) {
   }
 
   try {
-    await prisma.$executeRawUnsafe(`UPDATE "User" SET "status" = ?, "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = ?`, status, id);
-  } catch {
-    await prisma.user.update({ where: { id }, data: { status } });
+    await prisma.user.update({
+      where: { id },
+      data: { status },
+    });
+  } catch (e) {
+    console.error('Failed to toggle user status:', e);
+    return { success: false, error: 'Failed to update status.' };
   }
 
   await createAuditLog('User Status Changed', `Admin changed user ${id} status to ${status}`);
@@ -202,16 +189,13 @@ export async function resetUserPassword(id: string, newPassword: string) {
 
   const passwordHash = await hashPassword(newPassword);
   try {
-    await prisma.$executeRawUnsafe(
-      `UPDATE "User" SET "passwordHash" = ?, "mustChangePassword" = 1, "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = ?`,
-      passwordHash,
-      id
-    );
-  } catch {
     await prisma.user.update({
       where: { id },
       data: { passwordHash, mustChangePassword: true },
     });
+  } catch (e) {
+    console.error('Failed to reset user password:', e);
+    return { success: false, error: 'Failed to reset password.' };
   }
 
   await createAuditLog('Password Reset', `Admin reset password for user ${id}`);
@@ -230,9 +214,12 @@ export async function deleteUser(id: string) {
   }
 
   try {
-    await prisma.$executeRawUnsafe(`DELETE FROM "User" WHERE "id" = ?`, id);
-  } catch {
-    await prisma.user.delete({ where: { id } });
+    await prisma.user.delete({
+      where: { id },
+    });
+  } catch (e) {
+    console.error('Failed to delete user:', e);
+    return { success: false, error: 'Failed to delete user.' };
   }
 
   await createAuditLog('User Deleted', `Admin deleted user ${id}`);
@@ -247,13 +234,13 @@ export async function getAuditLogs() {
   }
 
   try {
-    const logs: any[] = await prisma.$queryRawUnsafe(`SELECT * FROM "AuditLog" ORDER BY "createdAt" DESC LIMIT 200`);
-    return logs;
-  } catch {
     return await prisma.auditLog.findMany({
       orderBy: { createdAt: 'desc' },
       take: 200,
     });
+  } catch (e) {
+    console.error('Failed to fetch audit logs:', e);
+    return [];
   }
 }
 
@@ -264,15 +251,6 @@ export async function updateProfile(data: { fullName: string; phone?: string; cu
   }
 
   try {
-    await prisma.$executeRawUnsafe(
-      `UPDATE "User" SET "fullName" = ?, "phone" = ?, "currency" = ?, "theme" = ?, "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = ?`,
-      data.fullName.trim(),
-      data.phone?.trim() || null,
-      data.currency || 'INR',
-      data.theme || 'light',
-      session.id
-    );
-  } catch {
     await prisma.user.update({
       where: { id: session.id },
       data: {
@@ -282,19 +260,21 @@ export async function updateProfile(data: { fullName: string; phone?: string; cu
         theme: data.theme || 'light',
       },
     });
+  } catch (e) {
+    console.error('Failed to update profile:', e);
+    return { success: false, error: 'Failed to update profile.' };
   }
 
-  // Update active session cookie
-  const updatedPayload = {
+  // Refresh user session cookie with updated values
+  const updated = {
     ...session,
     fullName: data.fullName.trim(),
-    currency: data.currency || session.currency,
+    currency: data.currency || 'INR',
   };
-  const token = await createSessionToken(updatedPayload, true);
+  const token = await createSessionToken(updated, true);
   await setSessionCookie(token, true);
 
-  await createAuditLog('Profile Updated', `User updated profile information`, { id: session.id, fullName: session.fullName });
-
+  await createAuditLog('Profile Updated', `User updated their profile details`);
   revalidatePath('/profile');
   return { success: true };
 }

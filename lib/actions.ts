@@ -171,12 +171,8 @@ export async function getAccounts() {
           where: { id: acc.id },
           data: { balance: calculated },
         });
-      } catch {
-        await prisma.$executeRawUnsafe(
-          `UPDATE "Account" SET "balance" = ? WHERE "id" = ?`,
-          calculated,
-          acc.id
-        );
+      } catch (err) {
+        console.error('Failed to sync account balance:', err);
       }
       acc.balance = calculated;
     }
@@ -188,34 +184,18 @@ export async function getAccounts() {
 export async function createAccount(data: { name: string; type: string; balance?: number; openingBalance?: number; currency?: string; status?: string; color: string; icon: string }): Promise<{ success: boolean; error?: string }> {
   try {
     const opBal = data.openingBalance ?? data.balance ?? 0;
-    try {
-      await prisma.account.create({
-        data: {
-          name: data.name,
-          type: data.type,
-          openingBalance: opBal,
-          balance: opBal,
-          currency: data.currency || 'INR',
-          status: data.status || 'active',
-          color: data.color,
-          icon: data.icon,
-        },
-      });
-    } catch {
-      const id = 'cmr' + Math.random().toString(36).substring(2, 11);
-      await prisma.$executeRawUnsafe(
-        `INSERT INTO "Account" ("id", "name", "type", "openingBalance", "balance", "currency", "status", "color", "icon", "createdAt", "updatedAt") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-        id,
-        data.name,
-        data.type,
-        opBal,
-        opBal,
-        data.currency || 'INR',
-        data.status || 'active',
-        data.color,
-        data.icon
-      );
-    }
+    await prisma.account.create({
+      data: {
+        name: data.name,
+        type: data.type,
+        openingBalance: opBal,
+        balance: opBal,
+        currency: data.currency || 'INR',
+        status: data.status || 'active',
+        color: data.color,
+        icon: data.icon,
+      },
+    });
     revalidateAll();
     return { success: true };
   } catch (e: any) {
@@ -246,35 +226,19 @@ export async function updateAccount(id: string, data: { name: string; type: stri
       const color = data.color || acc.color || '#3b82f6';
       const icon = data.icon || acc.icon || '🏦';
 
-      try {
-        await tx.account.update({
-          where: { id },
-          data: {
-            name: data.name,
-            type: data.type,
-            openingBalance: newOpening,
-            balance: newBalance,
-            currency,
-            status,
-            color,
-            icon,
-          },
-        });
-      } catch {
-        // Fallback to raw SQL if Prisma Client in-memory DMMF rejects new schema arguments like openingBalance
-        await tx.$executeRawUnsafe(
-          `UPDATE "Account" SET "name" = ?, "type" = ?, "openingBalance" = ?, "balance" = ?, "currency" = ?, "status" = ?, "color" = ?, "icon" = ?, "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = ?`,
-          data.name,
-          data.type,
-          newOpening,
-          newBalance,
+      await tx.account.update({
+        where: { id },
+        data: {
+          name: data.name,
+          type: data.type,
+          openingBalance: newOpening,
+          balance: newBalance,
           currency,
           status,
           color,
           icon,
-          id
-        );
-      }
+        },
+      });
     });
     revalidateAll();
     return { success: true };
@@ -884,12 +848,8 @@ export async function getAccountDetails(accountId: string) {
         where: { id: accountId },
         data: { balance: currentBalance },
       });
-    } catch {
-      await prisma.$executeRawUnsafe(
-        `UPDATE "Account" SET "balance" = ? WHERE "id" = ?`,
-        currentBalance,
-        accountId
-      );
+    } catch (err) {
+      console.error('Failed to sync account balance:', err);
     }
   }
 

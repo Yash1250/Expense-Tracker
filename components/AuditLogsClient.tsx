@@ -7,8 +7,8 @@ type AuditItem = {
   id: string;
   action: string;
   details: string;
-  performedByName?: string;
-  performedByUserId?: string;
+  performedByName: string | null;
+  performedByUserId: string | null;
   createdAt: Date;
 };
 

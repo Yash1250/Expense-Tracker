@@ -104,49 +104,27 @@ export async function createAuditLog(action: string, details: string, userOverri
       }
     }
 
-    try {
-      await prisma.auditLog.create({
-        data: {
-          action,
-          details,
-          performedByUserId: userId || null,
-          performedByName: userName || 'System',
-        },
-      });
-    } catch {
-      const id = 'aud_' + Math.random().toString(36).substring(2, 11);
-      await prisma.$executeRawUnsafe(
-        `INSERT INTO "AuditLog" ("id", "action", "details", "performedByUserId", "performedByName", "createdAt") VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-        id,
+    await prisma.auditLog.create({
+      data: {
         action,
         details,
-        userId || null,
-        userName || 'System'
-      );
-    }
+        performedByUserId: userId || null,
+        performedByName: userName || 'System',
+      },
+    });
   } catch (e) {
     console.error('Failed to write audit log:', e);
   }
 }
 
 export async function ensureAdminUser() {
-  let usersCount = 0;
   try {
-    const rawCount: any[] = await prisma.$queryRawUnsafe(`SELECT COUNT(*) as count FROM "User"`);
-    usersCount = Number(rawCount[0]?.count ?? 0);
-  } catch {
-    try {
-      usersCount = await prisma.user.count();
-    } catch {
-      usersCount = 0;
-    }
-  }
+    const usersCount = await prisma.user.count();
 
-  if (usersCount === 0) {
-    const hashed = await hashPassword('Admin@123');
-    const adminId = 'admin_user_001';
+    if (usersCount === 0) {
+      const hashed = await hashPassword('Admin@123');
+      const adminId = 'admin_user_001';
 
-    try {
       await prisma.user.create({
         data: {
           id: adminId,
@@ -159,32 +137,27 @@ export async function ensureAdminUser() {
           mustChangePassword: true,
         },
       });
-    } catch {
-      await prisma.$executeRawUnsafe(
-        `INSERT INTO "User" ("id", "fullName", "email", "passwordHash", "role", "status", "currency", "mustChangePassword", "createdAt", "updatedAt") VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-        adminId,
-        'System Admin',
-        'admin@example.com',
-        hashed,
-        'ADMIN',
-        'active',
-        'INR',
-        1
+
+      // Database agnostic updates for any orphan pre-existing records
+      try {
+        await prisma.expense.updateMany({ where: { userId: null }, data: { userId: adminId } });
+        await prisma.income.updateMany({ where: { userId: null }, data: { userId: adminId } });
+        await prisma.investment.updateMany({ where: { userId: null }, data: { userId: adminId } });
+        await prisma.account.updateMany({ where: { userId: null }, data: { userId: adminId } });
+        await prisma.category.updateMany({ where: { userId: null }, data: { userId: adminId } });
+        await prisma.budget.updateMany({ where: { userId: null }, data: { userId: adminId } });
+        await prisma.settings.updateMany({ where: { userId: null }, data: { userId: adminId } });
+      } catch (err) {
+        console.error('Orphan records update skipped:', err);
+      }
+
+      await createAuditLog(
+        'System Initialize',
+        'Initial Admin user (admin@example.com) seeded automatically with orphan data linked.',
+        { id: adminId, fullName: 'System Admin' }
       );
     }
-
-    // Attach any pre-existing orphan records to Admin so no user data is lost!
-    const tables = ['Expense', 'Income', 'Investment', 'Account', 'Category', 'Budget', 'Settings'];
-    for (const table of tables) {
-      try {
-        await prisma.$executeRawUnsafe(`UPDATE "${table}" SET "userId" = ? WHERE "userId" IS NULL`, adminId);
-      } catch {}
-    }
-
-    await createAuditLog(
-      'System Initialize',
-      'Initial Admin user (admin@example.com) seeded automatically with orphan data linked.',
-      { id: adminId, fullName: 'System Admin' }
-    );
+  } catch (e) {
+    console.error('Failed in ensureAdminUser:', e);
   }
 }
