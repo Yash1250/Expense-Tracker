@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Users, UserPlus, Search, Shield, Filter, CheckCircle2, XCircle,
   MoreVertical, Key, Trash2, Edit, AlertCircle, RefreshCw, X, Check
 } from 'lucide-react';
 import { createUser, updateUser, toggleUserStatus, resetUserPassword, deleteUser } from '@/lib/user-actions';
+import { startImpersonation } from '@/lib/actions';
 
 type UserItem = {
   id: string;
@@ -33,6 +34,18 @@ export default function UsersClient({ initialUsers }: { initialUsers: UserItem[]
   const [editUserItem, setEditUserItem] = useState<UserItem | null>(null);
   const [resetPwdUser, setResetPwdUser] = useState<UserItem | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (showCreateModal || resetPwdUser) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [showCreateModal, resetPwdUser]);
 
   // Form State
   const [fullName, setFullName] = useState('');
@@ -138,6 +151,17 @@ export default function UsersClient({ initialUsers }: { initialUsers: UserItem[]
         router.refresh();
       } else {
         alert(res.error || 'Failed to reset password.');
+      }
+    });
+  };
+
+  const handleImpersonate = (userId: string) => {
+    startTransition(async () => {
+      const res = await startImpersonation(userId);
+      if (res.success) {
+        window.location.href = '/';
+      } else {
+        alert(res.error || 'Failed to impersonate user.');
       }
     });
   };
@@ -288,6 +312,19 @@ export default function UsersClient({ initialUsers }: { initialUsers: UserItem[]
 
                   <td className="py-3.5 px-4 text-right">
                     <div className="flex items-center justify-end gap-1">
+                      {/* View as User */}
+                      {u.role !== 'ADMIN' && (
+                        <button
+                          onClick={() => handleImpersonate(u.id)}
+                          title="View as User"
+                          className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-400 hover:text-amber-500 transition-colors"
+                        >
+                          <svg className="w-[15px] h-[15px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                        </button>
+                      )}
                       {/* Toggle Active Status */}
                       <button
                         onClick={() => handleToggleStatus(u)}
@@ -334,16 +371,16 @@ export default function UsersClient({ initialUsers }: { initialUsers: UserItem[]
 
       {/* Create / Edit User Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-hidden">
-          <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl p-6 max-w-md w-full max-h-[90vh] flex flex-col my-auto animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-center pb-3 border-b border-slate-100 dark:border-zinc-800 shrink-0">
+        <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-0 md:p-4 animate-in fade-in duration-200" onClick={e => { if (e.target === e.currentTarget) setShowCreateModal(false); }}>
+          <div className="bg-white dark:bg-zinc-900 w-full md:max-w-md rounded-t-3xl md:rounded-3xl shadow-2xl max-h-[90vh] flex flex-col overflow-hidden pb-[env(safe-area-inset-bottom)] md:pb-0 animate-in fade-in slide-in-from-bottom-5 duration-200">
+            <div className="flex-shrink-0 bg-blue-600 text-white px-6 py-4 flex items-center justify-between rounded-t-3xl md:rounded-t-none">
               <h3 className="font-bold text-lg">{editUserItem ? 'Edit User' : 'Create New User'}</h3>
-              <button onClick={() => setShowCreateModal(false)} className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-400">
+              <button onClick={() => setShowCreateModal(false)} className="p-1 rounded-full bg-white/20 hover:bg-white/30 text-white transition">
                 <X size={18} />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto py-4 space-y-4 text-left pr-1">
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 text-left">
               {formError && (
                 <p className="text-xs text-red-500 bg-red-50 dark:bg-red-950/30 px-3 py-2 rounded-xl border border-red-200 dark:border-red-900/50">
                   {formError}
@@ -423,17 +460,17 @@ export default function UsersClient({ initialUsers }: { initialUsers: UserItem[]
               </div>
             </div>
 
-            <div className="flex gap-3 pt-3 border-t border-slate-100 dark:border-zinc-800 shrink-0">
+            <div className="flex-shrink-0 bg-zinc-50 dark:bg-zinc-800/40 border-t border-zinc-100 dark:border-zinc-800/80 px-6 py-4 flex gap-3">
               <button
                 onClick={() => setShowCreateModal(false)}
-                className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-zinc-700 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-zinc-700 text-sm font-medium text-slate-600 dark:text-zinc-400 hover:bg-slate-50 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSaveUser}
                 disabled={isPending}
-                className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-60 flex items-center justify-center gap-1 shadow-sm"
+                className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-60 flex items-center justify-center gap-1 shadow-sm transition-colors"
               >
                 <Check size={16} /> {isPending ? 'Saving…' : 'Save User'}
               </button>
@@ -444,7 +481,7 @@ export default function UsersClient({ initialUsers }: { initialUsers: UserItem[]
 
       {/* Reset Password Modal */}
       {resetPwdUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl p-6 max-w-sm w-full animate-in fade-in zoom-in-95 duration-200">
             <h3 className="font-bold text-lg mb-1">Reset Password</h3>
             <p className="text-xs text-slate-500 mb-4">Set a new password for {resetPwdUser.fullName} ({resetPwdUser.email})</p>

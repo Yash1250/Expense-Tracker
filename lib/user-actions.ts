@@ -278,3 +278,28 @@ export async function updateProfile(data: { fullName: string; phone?: string; cu
   revalidatePath('/profile');
   return { success: true };
 }
+
+export async function getSystemStats() {
+  const session = await getSession();
+  if (!session || session.role !== 'ADMIN') {
+    throw new Error('Unauthorized access');
+  }
+
+  const [totalUsers, activeUsers, totalExpenses, totalIncomes, totalInvestments, totalAuditLogs] = await Promise.all([
+    prisma.user.count(),
+    prisma.user.count({ where: { status: 'active' } }),
+    prisma.expense.count(),
+    prisma.income.count(),
+    prisma.investment.count(),
+    prisma.auditLog.count(),
+  ]);
+
+  return {
+    totalUsers,
+    activeUsers,
+    totalExpenses,
+    totalIncomes,
+    totalInvestments,
+    totalAuditLogs,
+  };
+}

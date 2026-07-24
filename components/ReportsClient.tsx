@@ -3,6 +3,8 @@
 import { useState, useTransition } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, LineChart, Line, AreaChart, Area } from 'recharts';
 import { getReportData } from '@/lib/actions';
+import ExportDropdown from '@/components/ExportDropdown';
+import { exportToPDF, exportToCSV, exportToExcel, exportToPrint } from '@/lib/export-utils';
 
 const PERIODS = [{ value: 'daily', label: 'Daily' }, { value: 'weekly', label: 'Weekly' }, { value: 'monthly', label: 'Monthly' }, { value: 'yearly', label: 'Yearly' }] as const;
 
@@ -12,6 +14,39 @@ export default function ReportsClient({ initialData, currency }: { initialData: 
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [isPending, startTransition] = useTransition();
+
+  const handleExport = (type: 'pdf' | 'csv' | 'excel' | 'print') => {
+    const title = `${period.toUpperCase()} Financial Report`;
+    const filterText = {
+      Period: period.charAt(0).toUpperCase() + period.slice(1),
+      Range: dateFrom && dateTo ? `${dateFrom} to ${dateTo}` : 'All Dates'
+    };
+    const summary = [
+      { label: 'Total Expense', value: `${currency}${data.total.toFixed(2)}` },
+      { label: 'Transactions Count', value: data.count.toString() },
+      { label: 'Average Expense', value: `${currency}${data.average.toFixed(2)}` },
+      { label: 'Highest Expense', value: `${currency}${data.highest.toFixed(2)}` }
+    ];
+    const columns = ['Date', 'Category', 'Merchant', 'Notes', 'Amount', 'Method'];
+    const rows = data.expenses.map((e: any) => [
+      e.date,
+      e.category,
+      e.merchant || '-',
+      e.notes || '-',
+      `${currency}${e.amount.toFixed(2)}`,
+      e.method
+    ]);
+
+    if (type === 'pdf') {
+      exportToPDF({ title, userName: 'Yash Mehta', filters: filterText, summary, columns, rows });
+    } else if (type === 'csv') {
+      exportToCSV(`report-${period}`, columns, rows);
+    } else if (type === 'excel') {
+      exportToExcel(`report-${period}`, columns, rows);
+    } else if (type === 'print') {
+      exportToPrint(title, columns, rows, summary, 'Yash Mehta');
+    }
+  };
 
   const loadData = (p: typeof period, from = dateFrom, to = dateTo) => {
     startTransition(async () => {
@@ -141,13 +176,7 @@ export default function ReportsClient({ initialData, currency }: { initialData: 
           <div className="bg-white dark:bg-zinc-800 rounded-2xl shadow-sm border border-zinc-100 dark:border-zinc-700 overflow-hidden">
             <div className="p-4 border-b border-zinc-100 dark:border-zinc-700 flex justify-between items-center">
               <h3 className="font-semibold">Transactions ({data.expenses.length})</h3>
-              <button onClick={async () => {
-                const rows = [['Date','Category','Merchant','Notes','Amount','Method'], ...data.expenses.map((e: any) => [e.date, e.category, e.merchant || '', e.notes || '', e.amount, e.method])];
-                const csv = rows.map(r => r.join(',')).join('\n');
-                const blob = new Blob([csv], { type: 'text/csv' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a'); a.href = url; a.download = `report-${period}.csv`; a.click();
-              }} className="text-sm text-blue-600 font-medium hover:underline">Export CSV</button>
+              <ExportDropdown onExport={handleExport} />
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">

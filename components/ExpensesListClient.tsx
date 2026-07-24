@@ -5,6 +5,8 @@ import { Search, Filter, Tag, Trash2, Edit2, Copy, X, Plus, CheckSquare, Square,
 import { deleteExpense, duplicateExpense, bulkDeleteExpenses, getExpenses, type ExpenseFilters } from '@/lib/actions';
 import ExpenseModal from './ExpenseModal';
 import { useRouter, usePathname } from 'next/navigation';
+import ExportDropdown from '@/components/ExportDropdown';
+import { exportToPDF, exportToCSV, exportToExcel, exportToPrint } from '@/lib/export-utils';
 
 const PAYMENT_METHODS = ['Cash', 'UPI', 'Credit Card', 'Debit Card', 'Net Banking', 'Wallet', 'Bank Transfer', 'Cheque'];
 
@@ -66,6 +68,8 @@ export default function ExpensesListClient({ initialData, categories, accounts, 
   const [isPending, startTransition] = useTransition();
   const [data, setData] = useState(initialData);
 
+
+
   // Filters state initialized from initialFilters
   const [search, setSearch] = useState(initialFilters?.search || '');
   const [categoryId, setCategoryId] = useState(initialFilters?.categoryId || '');
@@ -92,6 +96,11 @@ export default function ExpensesListClient({ initialData, categories, accounts, 
   const [showModal, setShowModal] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Sync local data with fresh server-fetched initialData after router.refresh()
+  useEffect(() => {
+    setData(initialData);
+  }, [initialData]);
 
   const isFirstRender = useRef(true);
 
@@ -235,6 +244,7 @@ export default function ExpensesListClient({ initialData, categories, accounts, 
       await deleteExpense(id);
       setData(prev => prev.map(g => ({ ...g, items: g.items.filter((i: any) => i.id !== id) })).filter(g => g.items.length > 0));
       setDeletingId(null);
+      router.refresh();
     });
   };
 
@@ -251,6 +261,7 @@ export default function ExpensesListClient({ initialData, categories, accounts, 
       await bulkDeleteExpenses([...selected]);
       setData(prev => prev.map(g => ({ ...g, items: g.items.filter((i: any) => !selected.has(i.id)) })).filter(g => g.items.length > 0));
       setSelected(new Set());
+      router.refresh();
     });
   };
 
@@ -282,6 +293,54 @@ export default function ExpensesListClient({ initialData, categories, accounts, 
   ].filter(Boolean).length;
 
   const hasActiveFilters = Boolean(search) || activeFilterCount > 0;
+
+  // Lock body scroll when delete confirmation or bulk deletes are open
+  useEffect(() => {
+    if (deletingId) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [deletingId]);
+
+  const handleExport = (type: 'pdf' | 'csv' | 'excel' | 'print') => {
+    const title = 'Expenses List Report';
+    const filterText = {
+      Category: categoryId ? categories.find(c => c.id === categoryId)?.name || '' : '',
+      Method: paymentMethod,
+      Account: accountId ? accounts.find(a => a.id === accountId)?.name || '' : '',
+      Month: month,
+      Search: search.trim() ? search : ''
+    };
+    const allExpenses = data.flatMap(g => g.items);
+    const totalAmountSum = allExpenses.reduce((s: number, e: any) => s + e.amount, 0);
+    const summary = [
+      { label: 'Total Expenses', value: `${currency}${totalAmountSum.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` },
+      { label: 'Transactions Count', value: allExpenses.length.toString() }
+    ];
+    const columns = ['Date', 'Category', 'Merchant', 'Notes', 'Amount', 'Payment Method'];
+    const rows = allExpenses.map((e: any) => [
+      typeof e.expenseDate === 'string' ? e.expenseDate.split('T')[0] : e.expenseDate.toISOString().split('T')[0],
+      e.category.name,
+      e.merchant || '-',
+      e.notes || '-',
+      `${currency}${e.amount.toFixed(2)}`,
+      e.paymentMethod
+    ]);
+
+    if (type === 'pdf') {
+      exportToPDF({ title, userName: 'Yash Mehta', filters: filterText, summary, columns, rows });
+    } else if (type === 'csv') {
+      exportToCSV('expenses-report', columns, rows);
+    } else if (type === 'excel') {
+      exportToExcel('expenses-report', columns, rows);
+    } else if (type === 'print') {
+      exportToPrint(title, columns, rows, summary, 'Yash Mehta');
+    }
+  };
 
   return (
     <div className="pb-6">
@@ -328,12 +387,15 @@ export default function ExpensesListClient({ initialData, categories, accounts, 
             </button>
           )}
 
-          <button
-            onClick={() => setShowModal(true)}
-            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 rounded-xl transition-colors shadow-sm ml-auto sm:ml-0"
-          >
-            <Plus size={16} /> Add Expense
-          </button>
+          <div className="flex items-center gap-2 ml-auto sm:ml-0">
+            <ExportDropdown onExport={handleExport} />
+            <button
+              onClick={() => setShowModal(true)}
+              className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 rounded-xl transition-colors shadow-sm"
+            >
+              <Plus size={16} /> Add Expense
+            </button>
+          </div>
         </div>
       </div>
 
@@ -685,7 +747,7 @@ export default function ExpensesListClient({ initialData, categories, accounts, 
 
       {/* Delete confirmation */}
       {deletingId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl p-6 max-w-sm w-full">
             <h3 className="font-bold text-lg mb-2">Delete Expense?</h3>
             <p className="text-zinc-500 text-sm mb-5">This action cannot be undone.</p>

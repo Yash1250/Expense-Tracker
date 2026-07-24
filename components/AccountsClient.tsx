@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useEffect } from 'react';
 import Link from 'next/link';
 import { Plus, Pencil, Trash2, X, Check, Wallet, ChevronRight, ShieldCheck, ShieldAlert, ArrowUpRight } from 'lucide-react';
 import { createAccount, updateAccount, deleteAccount } from '@/lib/actions';
@@ -30,6 +30,18 @@ export default function AccountsClient({ initialAccounts, currency = '₹' }: { 
   const [editAcc, setEditAcc] = useState<Account | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState('');
+
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (showModal || deletingId) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [showModal, deletingId]);
 
   const [name, setName] = useState('');
   const [type, setType] = useState('bank');
@@ -226,8 +238,8 @@ export default function AccountsClient({ initialAccounts, currency = '₹' }: { 
 
       {/* Add / Edit Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-hidden">
-          <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl p-6 max-w-md w-full max-h-[90vh] flex flex-col my-auto animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-0 md:p-4" onClick={e => { if (e.target === e.currentTarget) setShowModal(false); }}>
+          <div className="bg-white dark:bg-zinc-900 w-full md:max-w-md rounded-t-3xl md:rounded-3xl shadow-2xl max-h-[90vh] flex flex-col overflow-hidden pb-[env(safe-area-inset-bottom)] md:pb-0 animate-in fade-in slide-in-from-bottom-5 duration-200">
             <div className="flex justify-between items-center pb-3 border-b border-zinc-100 dark:border-zinc-800 shrink-0">
               <h3 className="font-bold text-lg">{editAcc ? 'Edit Account' : 'Add Account'}</h3>
               <button onClick={() => setShowModal(false)} className="p-1.5 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400">
@@ -395,9 +407,9 @@ export default function AccountsClient({ initialAccounts, currency = '₹' }: { 
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
+      {/* Delete Modal */}
       {deletingId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl p-6 max-w-sm w-full text-left">
             <h3 className="font-bold text-lg mb-2">Delete Account?</h3>
             {deleteError ? (

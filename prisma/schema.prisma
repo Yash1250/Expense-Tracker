@@ -45,8 +45,8 @@ model AuditLog {
 
 model Expense {
   id            String    @id @default(cuid())
-  userId        String?
-  user          User?     @relation(fields: [userId], references: [id])
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
   amount        Float
   categoryId    String
   category      Category  @relation(fields: [categoryId], references: [id])
@@ -63,8 +63,8 @@ model Expense {
 
 model Income {
   id          String    @id @default(cuid())
-  userId      String?
-  user        User?     @relation(fields: [userId], references: [id])
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
   amount      Float
   source      String
   description String?
@@ -77,21 +77,23 @@ model Income {
 
 model Category {
   id        String    @id @default(cuid())
-  userId    String?
-  user      User?     @relation(fields: [userId], references: [id])
-  name      String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  name      String
   icon      String    @default("Tag")
   color     String    @default("#3b82f6")
   enabled   Boolean   @default(true)
   isDefault Boolean   @default(false)
   createdAt DateTime  @default(now())
   expenses  Expense[]
+
+  @@unique([userId, name])
 }
 
 model Account {
   id             String       @id @default(cuid())
-  userId         String?
-  user           User?        @relation(fields: [userId], references: [id])
+  userId         String
+  user           User         @relation(fields: [userId], references: [id])
   name           String
   type           String       @default("bank")
   balance        Float        @default(0)
@@ -109,8 +111,8 @@ model Account {
 
 model Investment {
   id             String    @id @default(cuid())
-  userId         String?
-  user           User?     @relation(fields: [userId], references: [id])
+  userId         String
+  user           User      @relation(fields: [userId], references: [id])
   investmentType String
   investmentName String
   broker         String?
@@ -133,8 +135,8 @@ model Investment {
 
 model Budget {
   id           String   @id @default(cuid())
-  userId       String?
-  user         User?    @relation(fields: [userId], references: [id])
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
   dailyLimit   Float?
   weeklyLimit  Float?
   monthlyLimit Float?
@@ -143,8 +145,8 @@ model Budget {
 
 model Settings {
   id                   String  @id @default(cuid())
-  userId               String?
-  user                 User?   @relation(fields: [userId], references: [id])
+  userId               String
+  user                 User    @relation(fields: [userId], references: [id])
   currency             String  @default("INR")
   currencySymbol       String  @default("₹")
   theme                String  @default("system")

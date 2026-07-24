@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
+import { prisma } from './lib/db';
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'expense_tracker_secret_key_2026_super_secure_9988'
@@ -32,6 +33,12 @@ export async function proxy(req: NextRequest) {
     try {
       const { payload } = await jwtVerify(token, JWT_SECRET);
       session = payload;
+      if (session && session.userId) {
+        const userExists = await prisma.user.findUnique({ where: { id: session.userId } });
+        if (!userExists) {
+          session = null;
+        }
+      }
     } catch {
       session = null;
     }
@@ -41,7 +48,10 @@ export async function proxy(req: NextRequest) {
   if (!session && !isPublicRoute) {
     const loginUrl = new URL('/login', req.url);
     loginUrl.searchParams.set('callbackUrl', pathname === '/' ? '' : pathname);
-    return NextResponse.redirect(loginUrl);
+    const res = NextResponse.redirect(loginUrl);
+    res.cookies.delete(COOKIE_NAME);
+    res.cookies.delete('et_impersonated_userId');
+    return res;
   }
 
   // 2. Authenticated user accessing login/forgot-password → redirect to dashboard (/)

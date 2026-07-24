@@ -138,18 +138,8 @@ export async function ensureAdminUser() {
         },
       });
 
-      // Database agnostic updates for any orphan pre-existing records
-      try {
-        await prisma.expense.updateMany({ where: { userId: null }, data: { userId: adminId } });
-        await prisma.income.updateMany({ where: { userId: null }, data: { userId: adminId } });
-        await prisma.investment.updateMany({ where: { userId: null }, data: { userId: adminId } });
-        await prisma.account.updateMany({ where: { userId: null }, data: { userId: adminId } });
-        await prisma.category.updateMany({ where: { userId: null }, data: { userId: adminId } });
-        await prisma.budget.updateMany({ where: { userId: null }, data: { userId: adminId } });
-        await prisma.settings.updateMany({ where: { userId: null }, data: { userId: adminId } });
-      } catch (err) {
-        console.error('Orphan records update skipped:', err);
-      }
+
+      // No orphan records to update since userId is non-nullable now
 
       await createAuditLog(
         'System Initialize',

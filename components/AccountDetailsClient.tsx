@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Wallet, TrendingUp, TrendingDown, FileText, Search, CreditCard, ShieldCheck, Clock, Calendar } from 'lucide-react';
+import ExportDropdown from '@/components/ExportDropdown';
+import { exportToPDF, exportToCSV, exportToExcel, exportToPrint } from '@/lib/export-utils';
 
 type LedgerItem = {
   id: string;
@@ -44,6 +46,39 @@ export default function AccountDetailsClient({ details, currency }: Props) {
 
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all');
+
+  const handleExport = (type: 'pdf' | 'csv' | 'excel' | 'print') => {
+    const title = `${account.name} Account Statement`;
+    const filterText = {
+      Type: filterType !== 'all' ? filterType.toUpperCase() : 'ALL',
+      Search: search.trim() ? search : ''
+    };
+    const summary = [
+      { label: 'Opening Balance', value: `${currency}${account.openingBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` },
+      { label: 'Total Income', value: `${currency}${totalIncome.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` },
+      { label: 'Total Expense', value: `${currency}${totalExpense.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` },
+      { label: 'Current Balance', value: `${currency}${account.balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` }
+    ];
+    const columns = ['Date', 'Title', 'Category', 'Type', 'Amount', 'Running Balance'];
+    const rows = filteredLedger.map(item => [
+      item.dateStr,
+      item.title,
+      item.category,
+      item.type.toUpperCase(),
+      `${item.type === 'income' ? '+' : '-'}${currency}${item.amount.toFixed(2)}`,
+      `${currency}${item.runningBalance.toFixed(2)}`
+    ]);
+
+    if (type === 'pdf') {
+      exportToPDF({ title, userName: 'Yash Mehta', filters: filterText, summary, columns, rows });
+    } else if (type === 'csv') {
+      exportToCSV(`${account.name.toLowerCase()}-statement`, columns, rows);
+    } else if (type === 'excel') {
+      exportToExcel(`${account.name.toLowerCase()}-statement`, columns, rows);
+    } else if (type === 'print') {
+      exportToPrint(title, columns, rows, summary, 'Yash Mehta');
+    }
+  };
 
   const filteredLedger = ledger.filter(item => {
     const matchesType = filterType === 'all' || item.type === filterType;
@@ -160,13 +195,14 @@ export default function AccountDetailsClient({ details, currency }: Props) {
       <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-zinc-100 dark:border-zinc-800">
           <div>
-            <h2 className="text-lg font-bold flex items-center gap-2">
-              <FileText size={18} className="text-blue-600" /> Account Bank Statement Ledger
-            </h2>
+            <h3 className="font-bold text-base flex items-center gap-2">
+              <Clock size={16} className="text-blue-500" /> Account Statement
+            </h3>
             <p className="text-xs text-zinc-400 mt-0.5">Chronological transaction history and running balance calculation.</p>
           </div>
 
           <div className="flex items-center gap-2">
+            <ExportDropdown onExport={handleExport} />
             <div className="relative flex-1 sm:w-48">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
               <input

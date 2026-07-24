@@ -4,8 +4,12 @@ import { useState, useTransition } from 'react';
 import { Wallet, DollarSign, CreditCard, Save, AlertTriangle } from 'lucide-react';
 import { updateBudget } from '@/lib/actions';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import ExportDropdown from '@/components/ExportDropdown';
+import { exportToPDF, exportToCSV, exportToExcel, exportToPrint } from '@/lib/export-utils';
 
 export default function BudgetClient({ stats, budget, currency }: { stats: any; budget: any; currency: string }) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
   const [monthly, setMonthly] = useState(budget?.monthlyLimit ?? 50000);
@@ -15,8 +19,52 @@ export default function BudgetClient({ stats, budget, currency }: { stats: any; 
   const handleSave = () => {
     startTransition(async () => {
       await updateBudget({ monthly: Number(monthly), weekly: Number(weekly), daily: Number(daily) });
-      setSaved(true); setTimeout(() => setSaved(false), 2000);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+      router.refresh();
     });
+  };
+
+  const handleExport = (type: 'pdf' | 'csv' | 'excel' | 'print') => {
+    const title = 'Budget Performance Report';
+    const filterText = {};
+    const summary = [
+      { label: 'Highest Expense', value: `${currency}${stats.stats.highestExpense.toFixed(2)}` },
+      { label: 'Avg Expense', value: `${currency}${stats.stats.avgExpense.toFixed(2)}` },
+      { label: 'Total Transactions', value: stats.stats.totalExpenses.toString() },
+      { label: 'Net Savings', value: `${currency}${stats.netSavings.toFixed(2)}` }
+    ];
+    const columns = ['Budget Period', 'Limit', 'Spent', 'Remaining', 'Status', 'Usage %'];
+    
+    const periods = [
+      { name: 'Monthly Budget', limit: Number(monthly), used: stats.monthTotal },
+      { name: 'Weekly Budget', limit: Number(weekly), used: stats.weekTotal },
+      { name: 'Daily Budget', limit: Number(daily), used: stats.todayTotal }
+    ];
+
+    const rows = periods.map(p => {
+      const remaining = Math.max(p.limit - p.used, 0);
+      const pct = p.limit > 0 ? (p.used / p.limit) * 100 : 0;
+      const status = pct >= 100 ? 'Exceeded' : pct >= 80 ? 'Warning' : 'On Track';
+      return [
+        p.name,
+        `${currency}${p.limit.toFixed(2)}`,
+        `${currency}${p.used.toFixed(2)}`,
+        `${currency}${remaining.toFixed(2)}`,
+        status,
+        `${pct.toFixed(0)}%`
+      ];
+    });
+
+    if (type === 'pdf') {
+      exportToPDF({ title, userName: 'Yash Mehta', filters: filterText, summary, columns, rows });
+    } else if (type === 'csv') {
+      exportToCSV('budget-report', columns, rows);
+    } else if (type === 'excel') {
+      exportToExcel('budget-report', columns, rows);
+    } else if (type === 'print') {
+      exportToPrint(title, columns, rows, summary, 'Yash Mehta');
+    }
   };
 
   return (
@@ -37,9 +85,12 @@ export default function BudgetClient({ stats, budget, currency }: { stats: any; 
         <div className="bg-white dark:bg-zinc-900 rounded-3xl p-6 shadow-sm border border-zinc-100 dark:border-zinc-800">
           <div className="flex justify-between items-center mb-5">
             <h2 className="font-bold text-lg">Edit Budget Limits</h2>
-            <button onClick={handleSave} disabled={isPending} className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-xl transition-colors ${saved ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>
-              <Save size={15} />{saved ? 'Saved!' : isPending ? 'Saving…' : 'Save Changes'}
-            </button>
+            <div className="flex items-center gap-2">
+              <ExportDropdown onExport={handleExport} />
+              <button onClick={handleSave} disabled={isPending} className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-xl transition-colors ${saved ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>
+                <Save size={15} />{saved ? 'Saved!' : isPending ? 'Saving…' : 'Save Changes'}
+              </button>
+            </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[

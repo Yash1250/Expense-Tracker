@@ -11,7 +11,7 @@ const navLinks = [
   { href: '/reports', icon: PieChart, label: 'Reports' },
 ];
 
-export default function BottomNav() {
+export default function BottomNav({ role }: { role?: string }) {
   const pathname = usePathname();
   if (pathname === '/expenses/add') return null;
 

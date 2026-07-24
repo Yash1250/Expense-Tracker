@@ -9,6 +9,8 @@ import {
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { addInvestment, updateInvestment, deleteInvestment, InvestmentInput } from '@/lib/actions';
+import ExportDropdown from '@/components/ExportDropdown';
+import { exportToPDF, exportToCSV, exportToExcel, exportToPrint } from '@/lib/export-utils';
 
 const INVESTMENT_TYPES = [
   'Stocks', 'Mutual Funds', 'SIP', 'IPO', 'Gold', 'Silver',
@@ -108,6 +110,60 @@ export default function InvestmentsClient({ initialInvestments, stats, accounts,
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [formError, setFormError] = useState('');
   const [deleteError, setDeleteError] = useState('');
+
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (showModal || deletingId) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [showModal, deletingId]);
+
+  const handleExport = (type: 'pdf' | 'csv' | 'excel' | 'print') => {
+    const title = 'Investment Portfolio Report';
+    const filterText = {
+      Type: selectedType !== 'all' ? selectedType : '',
+      Broker: selectedBroker !== 'all' ? selectedBroker : '',
+      Account: selectedAccount !== 'all' ? selectedAccount : '',
+      Performance: selectedProfitLoss !== 'all' ? selectedProfitLoss : '',
+      Search: search.trim() ? search : ''
+    };
+    const summary = [
+      { label: 'Total Value', value: `${currency}${stats.currentPortfolioValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` },
+      { label: 'Total Invested', value: `${currency}${stats.totalInvested.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` },
+      { label: 'Total profit / loss', value: `${stats.totalProfitLoss >= 0 ? '+' : ''}${currency}${stats.totalProfitLoss.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` }
+    ];
+    const columns = ['Asset Name', 'Type', 'Broker', 'Invested', 'Current Value', 'P/L', 'Status', 'Date'];
+    const rows = filteredInvestments.map(item => {
+      const pl = item.currentValue - item.amount;
+      const plPct = item.amount > 0 ? (pl / item.amount) * 100 : 0;
+      const dStr = typeof item.investmentDate === 'string' ? item.investmentDate.split('T')[0] : item.investmentDate.toISOString().split('T')[0];
+      return [
+        item.investmentName,
+        item.investmentType,
+        item.broker || '-',
+        `${currency}${item.amount.toFixed(2)}`,
+        `${currency}${item.currentValue.toFixed(2)}`,
+        `${pl >= 0 ? '+' : ''}${currency}${pl.toFixed(2)} (${plPct.toFixed(1)}%)`,
+        item.status,
+        dStr
+      ];
+    });
+
+    if (type === 'pdf') {
+      exportToPDF({ title, userName: 'Yash Mehta', filters: filterText, summary, columns, rows });
+    } else if (type === 'csv') {
+      exportToCSV('investment-report', columns, rows);
+    } else if (type === 'excel') {
+      exportToExcel('investment-report', columns, rows);
+    } else if (type === 'print') {
+      exportToPrint(title, columns, rows, summary, 'Yash Mehta');
+    }
+  };
 
   // Form inputs
   const [invType, setInvType] = useState('Stocks');
@@ -462,8 +518,9 @@ export default function InvestmentsClient({ initialInvestments, stats, accounts,
             </button>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <span className="text-xs text-zinc-400 font-medium">{filteredInvestments.length} records</span>
+            <ExportDropdown onExport={handleExport} />
           </div>
         </div>
 
@@ -661,22 +718,21 @@ export default function InvestmentsClient({ initialInvestments, stats, accounts,
 
       {/* Add / Edit Investment Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl p-6 max-w-lg w-full my-8 max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-center mb-4">
+        <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-0 md:p-4" onClick={e => { if (e.target === e.currentTarget) setShowModal(false); }}>
+          <div className="bg-white dark:bg-zinc-900 w-full md:max-w-lg rounded-t-3xl md:rounded-3xl shadow-2xl max-h-[90vh] flex flex-col overflow-hidden pb-[env(safe-area-inset-bottom)] md:pb-0 animate-in fade-in slide-in-from-bottom-5 duration-200">
+            <div className="flex-shrink-0 bg-blue-600 text-white px-6 py-4 flex items-center justify-between rounded-t-3xl md:rounded-t-none">
               <h3 className="font-bold text-lg">{editItem ? 'Edit Investment' : 'Add New Investment'}</h3>
-              <button onClick={() => setShowModal(false)} className="p-1.5 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400">
+              <button onClick={() => setShowModal(false)} className="p-1 rounded-full bg-white/20 hover:bg-white/30 text-white transition">
                 <X size={18} />
               </button>
             </div>
 
-            {formError && (
-              <p className="text-xs text-red-500 bg-red-50 dark:bg-red-950/30 px-3 py-2 rounded-xl mb-4 border border-red-200 dark:border-red-900">
-                {formError}
-              </p>
-            )}
-
-            <div className="space-y-4 text-left">
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 text-left">
+              {formError && (
+                <p className="text-xs text-red-500 bg-red-50 dark:bg-red-950/30 px-3 py-2 rounded-xl mb-4 border border-red-200 dark:border-red-900">
+                  {formError}
+                </p>
+              )}
               {/* Type & Custom Type */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -887,7 +943,7 @@ export default function InvestmentsClient({ initialInvestments, stats, accounts,
               </div>
             </div>
 
-            <div className="flex gap-3 mt-6">
+            <div className="flex-shrink-0 bg-zinc-50 dark:bg-zinc-800/40 border-t border-zinc-100 dark:border-zinc-800/80 px-6 py-4 flex gap-3">
               <button
                 onClick={() => setShowModal(false)}
                 className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-medium text-zinc-600 dark:text-zinc-400"
@@ -909,7 +965,7 @@ export default function InvestmentsClient({ initialInvestments, stats, accounts,
 
       {/* Delete Modal */}
       {deletingId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl p-6 max-w-sm w-full text-left">
             <h3 className="font-bold text-lg mb-2">Delete Investment?</h3>
             {deleteError ? (

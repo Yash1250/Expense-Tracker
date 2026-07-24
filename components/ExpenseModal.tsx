@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useEffect } from 'react';
 import { X, Check, Calendar, Clock } from 'lucide-react';
 import { addExpense, updateExpense, ExpenseInput } from '@/lib/actions';
 
@@ -27,6 +27,14 @@ export default function ExpenseModal({ onClose, editData, accounts, currency }: 
   const [merchant, setMerchant] = useState(editData?.merchant || '');
   const [accountId, setAccountId] = useState(editData?.accountId || '');
 
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -42,16 +50,16 @@ export default function ExpenseModal({ onClose, editData, accounts, currency }: 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40 backdrop-blur-sm p-0 md:p-4" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="bg-white dark:bg-zinc-900 w-full md:max-w-lg rounded-t-3xl md:rounded-3xl shadow-2xl max-h-[95vh] overflow-y-auto">
+    <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-0 md:p-4" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <form onSubmit={handleSubmit} className="bg-white dark:bg-zinc-900 w-full md:max-w-lg rounded-t-3xl md:rounded-3xl shadow-2xl max-h-[90vh] flex flex-col overflow-hidden pb-[env(safe-area-inset-bottom)] md:pb-0 animate-in fade-in slide-in-from-bottom-5 duration-200">
         {/* Header */}
-        <div className="sticky top-0 bg-blue-600 text-white px-6 py-4 flex items-center justify-between rounded-t-3xl">
+        <div className="flex-shrink-0 bg-blue-600 text-white px-6 py-4 flex items-center justify-between rounded-t-3xl md:rounded-t-none">
           <h2 className="text-lg font-bold">{editData ? 'Edit Expense' : 'Add Expense'}</h2>
-          <button onClick={onClose} className="p-1 rounded-full bg-white/20 hover:bg-white/30 transition"><X size={18} /></button>
+          <button type="button" onClick={onClose} className="p-1 rounded-full bg-white/20 hover:bg-white/30 text-white transition"><X size={18} /></button>
         </div>
 
         {/* Amount hero */}
-        <div className="bg-blue-600 text-white px-6 pb-6 text-center">
+        <div className="flex-shrink-0 bg-blue-600 text-white px-6 pb-6 text-center">
           <p className="text-blue-100 text-xs mb-1">Amount ({currency})</p>
           <div className="flex items-center justify-center text-5xl font-bold">
             <span className="text-blue-300 mr-1">{currency}</span>
@@ -59,7 +67,8 @@ export default function ExpenseModal({ onClose, editData, accounts, currency }: 
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        {/* Form Content */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {error && <p className="text-sm text-red-500 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-xl">{error}</p>}
 
           <div className="grid grid-cols-2 gap-3">
@@ -107,12 +116,16 @@ export default function ExpenseModal({ onClose, editData, accounts, currency }: 
             <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Notes (Optional)</label>
             <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Add notes…" rows={2} className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
           </div>
+        </div>
 
-          <button type="submit" disabled={isPending} className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-semibold py-3.5 rounded-xl shadow-lg shadow-blue-500/30 flex items-center justify-center gap-2 transition active:scale-95">
-            <Check size={18} />{isPending ? 'Saving…' : editData ? 'Update Expense' : 'Save Expense'}
+        {/* Sticky Footer */}
+        <div className="flex-shrink-0 bg-zinc-50 dark:bg-zinc-800/40 border-t border-zinc-100 dark:border-zinc-800/80 px-6 py-4 flex gap-3">
+          <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-medium text-zinc-600 dark:text-zinc-400">Cancel</button>
+          <button type="submit" disabled={isPending} className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-semibold flex items-center justify-center gap-1 transition-colors">
+            <Check size={16} />{isPending ? 'Saving…' : editData ? 'Update' : 'Save'}
           </button>
-        </form>
-      </div>
+        </div>
+      </form>
     </div>
   );
 }

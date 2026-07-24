@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import {
   Search, Bell, Plus, User as UserIcon, Settings,
-  Key, LogOut, ChevronDown, ArrowLeft, Menu,
+  Key, LogOut, ChevronDown, ArrowLeft, Menu, Users, Tag, ShieldCheck
 } from 'lucide-react';
 import { logoutAction } from '@/lib/auth-actions';
 
@@ -19,8 +19,7 @@ const pageTitles: Record<string, string> = {
   '/budget': 'Budget',
   '/accounts': 'Accounts',
   '/categories': 'Categories',
-  '/users': 'User Management',
-  '/audit-logs': 'Audit Logs',
+  '/admin': 'System Admin',
   '/profile': 'My Profile',
   '/settings': 'Settings',
   '/change-password': 'Change Password',
@@ -30,12 +29,23 @@ const pageTitles: Record<string, string> = {
 // Pages that show a back-arrow instead of a menu icon on mobile
 const BACK_ROUTES = ['/expenses/add', '/change-password'];
 
-export default function TopBar() {
+export default function TopBar({ role = 'USER', user }: { role?: 'ADMIN' | 'USER'; user?: { fullName: string; email: string } | null }) {
   const pathname = usePathname();
   const router = useRouter();
   const title = pageTitles[pathname] ?? 'Expense Tracker';
   const [showDropdown, setShowDropdown] = useState(false);
   const [isPending, startTransition] = useTransition();
+
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .substring(0, 2)
+      .toUpperCase();
+  };
+
+  const initials = user?.fullName ? getInitials(user.fullName) : 'YM';
 
   const isBackRoute = BACK_ROUTES.includes(pathname);
 
@@ -46,7 +56,7 @@ export default function TopBar() {
   };
 
   return (
-    <header className="sticky top-0 z-30 shrink-0 flex items-center justify-between h-14 md:h-16 px-4 md:px-6 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800 shadow-sm"
+    <header className="sticky top-0 z-30 shrink-0 flex items-center justify-between h-14 md:h-16 px-4 md:px-6 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800 shadow-sm"
       style={{ paddingTop: 'env(safe-area-inset-top)' }}
     >
       {/* ── Left: Back button (mobile sub-pages) or page title ── */}
@@ -115,7 +125,7 @@ export default function TopBar() {
             aria-expanded={showDropdown}
           >
             <div className="w-7 h-7 md:w-8 md:h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center shadow-sm">
-              <span className="text-[10px] md:text-xs font-bold text-white">YM</span>
+              <span className="text-[10px] md:text-xs font-bold text-white">{initials}</span>
             </div>
             <ChevronDown size={13} className="text-slate-400 hidden md:block" />
           </button>
@@ -128,6 +138,10 @@ export default function TopBar() {
                 className="absolute right-0 mt-2 w-52 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-2xl shadow-2xl py-1.5 z-50 text-sm font-medium"
                 onClick={() => setShowDropdown(false)}
               >
+                <div className="px-4 py-2 border-b border-zinc-100 dark:border-zinc-800">
+                  <p className="text-xs text-zinc-400">Signed in as</p>
+                  <p className="font-semibold text-zinc-800 dark:text-zinc-200 truncate">{user?.fullName || 'Yash Mehta'}</p>
+                </div>
                 <Link href="/profile" className="flex items-center gap-2.5 px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-200 transition-colors">
                   <UserIcon size={15} className="text-slate-400" /> My Profile
                 </Link>
@@ -137,6 +151,16 @@ export default function TopBar() {
                 <Link href="/change-password" className="flex items-center gap-2.5 px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-200 transition-colors">
                   <Key size={15} className="text-slate-400" /> Change Password
                 </Link>
+
+                {role === 'ADMIN' && (
+                  <>
+                    <div className="my-1 border-t border-slate-100 dark:border-zinc-800" />
+                    <div className="px-4 py-1.5 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Admin Panel</div>
+                    <Link href="/admin" className="flex items-center gap-2.5 px-4 py-2 hover:bg-slate-50 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-200 transition-colors">
+                      <ShieldCheck size={15} className="text-slate-400" /> System Admin
+                    </Link>
+                  </>
+                )}
 
                 <div className="my-1 border-t border-slate-100 dark:border-zinc-800" />
 

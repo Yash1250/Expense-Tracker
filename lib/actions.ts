@@ -3,23 +3,58 @@
 import { prisma } from './db';
 import { revalidatePath } from 'next/cache';
 import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, subDays, subMonths, subWeeks, subYears } from 'date-fns';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 
 import { getSession, createAuditLog } from './auth';
 
-const REVALIDATE_PATHS = ['/', '/expenses', '/reports', '/budget', '/income', '/accounts', '/investments', '/users'];
-function revalidateAll() { REVALIDATE_PATHS.forEach(p => revalidatePath(p)); }
+const REVALIDATE_PATHS = ['/', '/expenses', '/reports', '/budget', '/income', '/accounts', '/investments', '/categories', '/admin'];
+function revalidateAll() {
+  // Revalidate the root layout to cascade to all nested layouts/pages
+  revalidatePath('/', 'layout');
+  REVALIDATE_PATHS.forEach(p => revalidatePath(p));
+}
 
-async function getUserScope() {
+export async function requireUserScope() {
   const session = await getSession();
-  if (!session) return { userId: null, isAdmin: false };
+  if (!session) redirect('/login');
+
+  const userExists = await prisma.user.findUnique({ where: { id: session.id } });
+  if (!userExists) {
+    redirect('/login');
+  }
+  
+  let userId = session.id;
+  let isImpersonating = false;
+  let impersonatedUser = null;
+
+  if (session.role === 'ADMIN') {
+    const cookieStore = await cookies();
+    const impersonateId = cookieStore.get('et_impersonated_userId')?.value;
+    if (impersonateId) {
+      const targetUser = await prisma.user.findUnique({
+        where: { id: impersonateId },
+        select: { id: true, fullName: true, email: true }
+      });
+      if (targetUser) {
+        userId = targetUser.id;
+        isImpersonating = true;
+        impersonatedUser = targetUser;
+      }
+    }
+  }
+
   return {
-    userId: session.id,
+    userId,
     isAdmin: session.role === 'ADMIN',
+    realUserId: session.id,
+    isImpersonating,
+    impersonatedUser
   };
 }
 
 // ─── SEED HELPERS ────────────────────────────────────────────────────────────
-async function ensureDefaults() {
+async function ensureDefaults(userId: string) {
   // Default categories
   const defaultCats = [
     { name: 'Food', icon: '🍔', color: '#f97316' },
@@ -38,92 +73,164 @@ async function ensureDefaults() {
     { name: 'Miscellaneous', icon: '📦', color: '#64748b' },
   ];
   for (const cat of defaultCats) {
-    await prisma.category.upsert({ where: { name: cat.name }, update: {}, create: { ...cat, isDefault: true } });
+    await prisma.category.upsert({
+      where: { userId_name: { userId, name: cat.name } },
+      update: {},
+      create: { userId, name: cat.name, icon: cat.icon, color: cat.color, isDefault: true }
+    });
   }
 
   // Default settings
-  const s = await prisma.settings.findFirst();
-  if (!s) await prisma.settings.create({ data: {} });
+  const s = await prisma.settings.findFirst({ where: { userId } });
+  if (!s) {
+    await prisma.settings.create({
+      data: {
+        userId,
+        currency: 'INR',
+        currencySymbol: '₹',
+        theme: 'system',
+        dateFormat: 'DD/MM/YYYY',
+        timeFormat: '12h',
+        defaultPaymentMethod: 'UPI'
+      }
+    });
+  }
 
   // Default budget
-  const b = await prisma.budget.findFirst();
-  if (!b) await prisma.budget.create({ data: { monthlyLimit: 50000, weeklyLimit: 12000, dailyLimit: 1500 } });
+  const b = await prisma.budget.findFirst({ where: { userId } });
+  if (!b) {
+    await prisma.budget.create({
+      data: {
+        userId,
+        monthlyLimit: 50000,
+        weeklyLimit: 12000,
+        dailyLimit: 1500
+      }
+    });
+  }
 
-  // Default account
-  const a = await prisma.account.findFirst();
-  if (!a) {
-    await prisma.account.create({ data: { name: 'Cash', type: 'cash', balance: 0, color: '#10b981', icon: '💵' } });
-    await prisma.account.create({ data: { name: 'Bank Account', type: 'bank', balance: 0, color: '#3b82f6', icon: '🏦' } });
+  // Default accounts
+  const aCount = await prisma.account.count({ where: { userId } });
+  if (aCount === 0) {
+    await prisma.account.create({ data: { userId, name: 'Cash', type: 'cash', balance: 0, openingBalance: 0, color: '#10b981', icon: '💵' } });
+    await prisma.account.create({ data: { userId, name: 'Bank Account', type: 'bank', balance: 0, openingBalance: 0, color: '#3b82f6', icon: '🏦' } });
   }
 }
 
-async function getCategoryId(name: string): Promise<string> {
-  let cat = await prisma.category.findFirst({ where: { name } });
-  if (!cat) cat = await prisma.category.create({ data: { name, icon: '📦', color: '#64748b' } });
+async function getCategoryId(userId: string, name: string): Promise<string> {
+  let cat = await prisma.category.findFirst({ where: { userId, name } });
+  if (!cat) cat = await prisma.category.create({ data: { userId, name, icon: '📦', color: '#64748b' } });
   return cat.id;
 }
 
 // ─── SETTINGS ────────────────────────────────────────────────────────────────
 export async function getSettings() {
-  await ensureDefaults();
-  const settings = await prisma.settings.findFirst();
-  const budget = await prisma.budget.findFirst();
+  const { userId } = await requireUserScope();
+  await ensureDefaults(userId);
+  const settings = await prisma.settings.findFirst({ where: { userId } });
+  const budget = await prisma.budget.findFirst({ where: { userId } });
   return { settings: settings!, budget: budget! };
 }
 
 export async function updateTheme(theme: string) {
-  const s = await prisma.settings.findFirst();
-  if (s) await prisma.settings.update({ where: { id: s.id }, data: { theme } });
+  const { userId } = await requireUserScope();
+  const s = await prisma.settings.findFirst({ where: { userId } });
+  if (s) {
+    await prisma.settings.update({ where: { id: s.id }, data: { theme } });
+  } else {
+    await prisma.settings.create({ data: { userId, theme } });
+  }
   revalidatePath('/settings');
 }
 
 export async function updateCurrency(currency: string) {
-  const s = await prisma.settings.findFirst();
+  const { userId } = await requireUserScope();
+  const s = await prisma.settings.findFirst({ where: { userId } });
   const symbols: Record<string, string> = { INR: '₹', USD: '$', EUR: '€', GBP: '£' };
-  if (s) await prisma.settings.update({ where: { id: s.id }, data: { currency, currencySymbol: symbols[currency] || currency } });
+  if (s) {
+    await prisma.settings.update({ where: { id: s.id }, data: { currency, currencySymbol: symbols[currency] || currency } });
+  } else {
+    await prisma.settings.create({ data: { userId, currency, currencySymbol: symbols[currency] || currency } });
+  }
   revalidatePath('/settings');
 }
 
 export async function updateBudget(limits: { monthly?: number; weekly?: number; daily?: number; monthlyLimit?: number; weeklyLimit?: number; dailyLimit?: number }) {
-  const b = await prisma.budget.findFirst();
+  const { userId } = await requireUserScope();
+  const b = await prisma.budget.findFirst({ where: { userId } });
   const m = limits.monthlyLimit ?? limits.monthly;
   const w = limits.weeklyLimit ?? limits.weekly;
   const d = limits.dailyLimit ?? limits.daily;
   const data = { ...(m != null && { monthlyLimit: m }), ...(w != null && { weeklyLimit: w }), ...(d != null && { dailyLimit: d }) };
-  if (b) await prisma.budget.update({ where: { id: b.id }, data });
-  else await prisma.budget.create({ data: { monthlyLimit: m, weeklyLimit: w, dailyLimit: d } });
+  if (b) {
+    await prisma.budget.update({ where: { id: b.id }, data });
+  } else {
+    await prisma.budget.create({ data: { ...data, userId } });
+  }
   revalidateAll();
 }
 
 export async function updateDefaultPaymentMethod(method: string) {
-  const s = await prisma.settings.findFirst();
-  if (s) await prisma.settings.update({ where: { id: s.id }, data: { defaultPaymentMethod: method } });
+  const { userId } = await requireUserScope();
+  const s = await prisma.settings.findFirst({ where: { userId } });
+  if (s) {
+    await prisma.settings.update({ where: { id: s.id }, data: { defaultPaymentMethod: method } });
+  } else {
+    await prisma.settings.create({ data: { userId, defaultPaymentMethod: method } });
+  }
   revalidatePath('/settings');
 }
 
 // ─── CATEGORIES ──────────────────────────────────────────────────────────────
 export async function getCategories() {
-  await ensureDefaults();
-  return prisma.category.findMany({ orderBy: { name: 'asc' }, include: { _count: { select: { expenses: true } } } });
+  const { userId } = await requireUserScope();
+  await ensureDefaults(userId);
+  return prisma.category.findMany({
+    where: { userId },
+    orderBy: { name: 'asc' },
+    include: { _count: { select: { expenses: true } } }
+  });
 }
 
 export async function createCategory(data: { name: string; icon: string; color: string }) {
+  const { userId } = await requireUserScope();
   try {
-    await prisma.category.create({ data });
+    await prisma.category.create({
+      data: {
+        userId,
+        name: data.name,
+        icon: data.icon,
+        color: data.color
+      }
+    });
     revalidateAll();
     return { success: true };
-  } catch { return { success: false, error: 'Category with this name already exists.' }; }
+  } catch {
+    return { success: false, error: 'Category with this name already exists.' };
+  }
 }
 
 export async function updateCategory(id: string, data: { name: string; icon: string; color: string }) {
+  const { userId } = await requireUserScope();
   try {
+    const existing = await prisma.category.findUnique({ where: { id } });
+    if (!existing || existing.userId !== userId) {
+      return { success: false, error: 'Forbidden' };
+    }
     await prisma.category.update({ where: { id }, data });
     revalidateAll();
     return { success: true };
-  } catch { return { success: false, error: 'Failed to update category.' }; }
+  } catch {
+    return { success: false, error: 'Failed to update category.' };
+  }
 }
 
 export async function deleteCategory(id: string) {
+  const { userId } = await requireUserScope();
+  const existing = await prisma.category.findUnique({ where: { id } });
+  if (!existing || existing.userId !== userId) {
+    return { success: false, error: 'Forbidden' };
+  }
   const count = await prisma.expense.count({ where: { categoryId: id } });
   if (count > 0) return { success: false, error: `Cannot delete: ${count} expenses use this category.` };
   await prisma.category.delete({ where: { id } });
@@ -132,6 +239,11 @@ export async function deleteCategory(id: string) {
 }
 
 export async function toggleCategory(id: string, enabled: boolean) {
+  const { userId } = await requireUserScope();
+  const existing = await prisma.category.findUnique({ where: { id } });
+  if (!existing || existing.userId !== userId) {
+    return { success: false, error: 'Forbidden' };
+  }
   await prisma.category.update({ where: { id }, data: { enabled } });
   revalidateAll();
   return { success: true };
@@ -139,10 +251,12 @@ export async function toggleCategory(id: string, enabled: boolean) {
 
 // ─── ACCOUNTS ────────────────────────────────────────────────────────────────
 export async function getAccounts() {
-  await ensureDefaults();
+  const { userId } = await requireUserScope();
+  await ensureDefaults(userId);
   let accounts: any[] = [];
   try {
     accounts = await prisma.account.findMany({
+      where: { userId },
       orderBy: { name: 'asc' },
       include: { _count: { select: { expenses: true, incomes: true } } },
     });
@@ -157,8 +271,8 @@ export async function getAccounts() {
   // Re-verify live balances from transactions to guarantee accuracy using DB openingBalance
   for (const acc of accounts) {
     const op = Number(acc.openingBalance ?? 0);
-    const expSum = await prisma.expense.aggregate({ where: { accountId: acc.id }, _sum: { amount: true } });
-    const incSum = await prisma.income.aggregate({ where: { accountId: acc.id }, _sum: { amount: true } });
+    const expSum = await prisma.expense.aggregate({ where: { userId, accountId: acc.id }, _sum: { amount: true } });
+    const incSum = await prisma.income.aggregate({ where: { userId, accountId: acc.id }, _sum: { amount: true } });
     const exp = expSum._sum.amount ?? 0;
     const inc = incSum._sum.amount ?? 0;
     const calculated = op + inc - exp;
@@ -180,10 +294,12 @@ export async function getAccounts() {
 }
 
 export async function createAccount(data: { name: string; type: string; balance?: number; openingBalance?: number; currency?: string; status?: string; color: string; icon: string }): Promise<{ success: boolean; error?: string }> {
+  const { userId } = await requireUserScope();
   try {
     const opBal = data.openingBalance ?? data.balance ?? 0;
     await prisma.account.create({
       data: {
+        userId,
         name: data.name,
         type: data.type,
         openingBalance: opBal,
@@ -202,7 +318,13 @@ export async function createAccount(data: { name: string; type: string; balance?
 }
 
 export async function updateAccount(id: string, data: { name: string; type: string; balance?: number; openingBalance?: number; currency?: string; status?: string; color: string; icon: string }): Promise<{ success: boolean; error?: string }> {
+  const { userId } = await requireUserScope();
   try {
+    const existing = await prisma.account.findUnique({ where: { id } });
+    if (!existing || existing.userId !== userId) {
+      return { success: false, error: 'Forbidden' };
+    }
+
     await prisma.$transaction(async (tx: any) => {
       const acc = await tx.account.findUnique({ where: { id } });
       if (!acc) throw new Error('Account not found');
@@ -213,8 +335,8 @@ export async function updateAccount(id: string, data: { name: string; type: stri
         : (data.balance !== undefined && !isNaN(Number(data.balance)) ? Number(data.balance) : currentOpening);
       const newOpening = isNaN(rawOpening) ? 0 : rawOpening;
 
-      const expSum = await tx.expense.aggregate({ where: { accountId: id }, _sum: { amount: true } });
-      const incSum = await tx.income.aggregate({ where: { accountId: id }, _sum: { amount: true } });
+      const expSum = await tx.expense.aggregate({ where: { userId, accountId: id }, _sum: { amount: true } });
+      const incSum = await tx.income.aggregate({ where: { userId, accountId: id }, _sum: { amount: true } });
       const exp = expSum._sum.amount ?? 0;
       const inc = incSum._sum.amount ?? 0;
 
@@ -247,9 +369,14 @@ export async function updateAccount(id: string, data: { name: string; type: stri
 }
 
 export async function deleteAccount(id: string) {
-  const expCount = await prisma.expense.count({ where: { accountId: id } });
-  const incCount = await prisma.income.count({ where: { accountId: id } });
-  const invCount = (prisma as any).investment ? await (prisma as any).investment.count({ where: { accountId: id } }) : 0;
+  const { userId } = await requireUserScope();
+  const existing = await prisma.account.findUnique({ where: { id } });
+  if (!existing || existing.userId !== userId) {
+    return { success: false, error: 'Forbidden' };
+  }
+  const expCount = await prisma.expense.count({ where: { userId, accountId: id } });
+  const incCount = await prisma.income.count({ where: { userId, accountId: id } });
+  const invCount = (prisma as any).investment ? await (prisma as any).investment.count({ where: { userId, accountId: id } }) : 0;
   const totalLinked = expCount + incCount + invCount;
   if (totalLinked > 0) {
     return { success: false, error: `Cannot delete: ${totalLinked} transactions/investments are linked to this account.` };
@@ -266,11 +393,13 @@ export type ExpenseInput = {
 };
 
 export async function addExpense(data: ExpenseInput) {
+  const { userId } = await requireUserScope();
   try {
-    const categoryId = await getCategoryId(data.categoryName);
+    const categoryId = await getCategoryId(userId, data.categoryName);
     await prisma.$transaction(async (tx) => {
       await tx.expense.create({
         data: {
+          userId,
           amount: data.amount,
           categoryId,
           expenseDate: new Date(data.expenseDate),
@@ -283,6 +412,10 @@ export async function addExpense(data: ExpenseInput) {
       });
 
       if (data.accountId) {
+        // Verify account ownership
+        const acc = await tx.account.findUnique({ where: { id: data.accountId } });
+        if (!acc || acc.userId !== userId) throw new Error("Forbidden account selection");
+
         await tx.account.update({
           where: { id: data.accountId },
           data: { balance: { decrement: data.amount } },
@@ -291,17 +424,18 @@ export async function addExpense(data: ExpenseInput) {
     });
     revalidateAll();
     return { success: true };
-  } catch (e) {
-    return { success: false, error: 'Failed to add expense.' };
+  } catch (e: any) {
+    return { success: false, error: e?.message || 'Failed to add expense.' };
   }
 }
 
 export async function updateExpense(id: string, data: ExpenseInput) {
+  const { userId } = await requireUserScope();
   try {
-    const categoryId = await getCategoryId(data.categoryName);
+    const categoryId = await getCategoryId(userId, data.categoryName);
     await prisma.$transaction(async (tx) => {
       const oldExp = await tx.expense.findUnique({ where: { id } });
-      if (!oldExp) throw new Error('Expense not found');
+      if (!oldExp || oldExp.userId !== userId) throw new Error('Forbidden or not found');
 
       // 1. Reverse old expense impact
       if (oldExp.accountId) {
@@ -311,8 +445,11 @@ export async function updateExpense(id: string, data: ExpenseInput) {
         });
       }
 
-      // 2. Apply new expense impact
+      // 2. Verify and apply new expense impact
       if (data.accountId) {
+        const acc = await tx.account.findUnique({ where: { id: data.accountId } });
+        if (!acc || acc.userId !== userId) throw new Error("Forbidden account selection");
+
         await tx.account.update({
           where: { id: data.accountId },
           data: { balance: { decrement: data.amount } },
@@ -336,17 +473,18 @@ export async function updateExpense(id: string, data: ExpenseInput) {
     });
     revalidateAll();
     return { success: true };
-  } catch {
-    return { success: false, error: 'Failed to update expense.' };
+  } catch (e: any) {
+    return { success: false, error: e?.message || 'Failed to update expense.' };
   }
 }
 
 export async function deleteExpense(id: string) {
+  const { userId } = await requireUserScope();
   try {
     let deletedAmount = 0;
     await prisma.$transaction(async (tx) => {
       const exp = await tx.expense.findUnique({ where: { id } });
-      if (!exp) return;
+      if (!exp || exp.userId !== userId) throw new Error('Forbidden or not found');
       deletedAmount = exp.amount;
 
       if (exp.accountId) {
@@ -361,19 +499,21 @@ export async function deleteExpense(id: string) {
     await createAuditLog('Expense Deletion', `Deleted expense ID ${id} (Amount: ${deletedAmount})`);
     revalidateAll();
     return { success: true };
-  } catch {
-    return { success: false, error: 'Failed to delete expense.' };
+  } catch (e: any) {
+    return { success: false, error: e?.message || 'Failed to delete expense.' };
   }
 }
 
 export async function duplicateExpense(id: string) {
+  const { userId } = await requireUserScope();
   try {
     await prisma.$transaction(async (tx) => {
       const exp = await tx.expense.findUnique({ where: { id } });
-      if (!exp) throw new Error('Expense not found.');
+      if (!exp || exp.userId !== userId) throw new Error('Forbidden or not found');
 
       await tx.expense.create({
         data: {
+          userId,
           amount: exp.amount,
           categoryId: exp.categoryId,
           expenseDate: new Date(),
@@ -394,15 +534,16 @@ export async function duplicateExpense(id: string) {
     });
     revalidateAll();
     return { success: true };
-  } catch {
-    return { success: false, error: 'Failed to duplicate expense.' };
+  } catch (e: any) {
+    return { success: false, error: e?.message || 'Failed to duplicate expense.' };
   }
 }
 
 export async function bulkDeleteExpenses(ids: string[]) {
+  const { userId } = await requireUserScope();
   try {
     await prisma.$transaction(async (tx) => {
-      const expenses = await tx.expense.findMany({ where: { id: { in: ids } } });
+      const expenses = await tx.expense.findMany({ where: { id: { in: ids }, userId } });
       for (const exp of expenses) {
         if (exp.accountId) {
           await tx.account.update({
@@ -411,12 +552,12 @@ export async function bulkDeleteExpenses(ids: string[]) {
           });
         }
       }
-      await tx.expense.deleteMany({ where: { id: { in: ids } } });
+      await tx.expense.deleteMany({ where: { id: { in: ids }, userId } });
     });
     revalidateAll();
     return { success: true };
-  } catch {
-    return { success: false, error: 'Failed to bulk delete expenses.' };
+  } catch (e: any) {
+    return { success: false, error: e?.message || 'Failed to bulk delete expenses.' };
   }
 }
 
@@ -437,8 +578,9 @@ export type ExpenseFilters = {
 };
 
 export async function getExpenseYears() {
-  await ensureDefaults();
-  const expenses = await prisma.expense.findMany({ select: { expenseDate: true } });
+  const { userId } = await requireUserScope();
+  await ensureDefaults(userId);
+  const expenses = await prisma.expense.findMany({ where: { userId }, select: { expenseDate: true } });
   const yearsSet = new Set<number>();
   yearsSet.add(new Date().getFullYear());
   for (const exp of expenses) {
@@ -450,7 +592,8 @@ export async function getExpenseYears() {
 }
 
 export async function getExpenses(filters: ExpenseFilters = {}) {
-  const where: any = {};
+  const { userId } = await requireUserScope();
+  const where: any = { userId };
   const now = new Date();
 
   // Category filter
@@ -656,12 +799,20 @@ export async function getExpenses(filters: ExpenseFilters = {}) {
 }
 
 export async function getExpenseById(id: string) {
-  return prisma.expense.findUnique({ where: { id }, include: { category: true, account: true } });
+  const { userId } = await requireUserScope();
+  const expense = await prisma.expense.findUnique({ where: { id }, include: { category: true, account: true } });
+  if (!expense || expense.userId !== userId) return null;
+  return expense;
 }
 
 // ─── INCOME ──────────────────────────────────────────────────────────────────
 export async function getIncomes() {
-  const incomes = await prisma.income.findMany({ orderBy: { incomeDate: 'desc' }, include: { account: true } });
+  const { userId } = await requireUserScope();
+  const incomes = await prisma.income.findMany({
+    where: { userId },
+    orderBy: { incomeDate: 'desc' },
+    include: { account: true }
+  });
   const groups: Record<string, any[]> = {};
   for (const inc of incomes) {
     const key = inc.incomeDate.toISOString().split('T')[0];
@@ -672,10 +823,12 @@ export async function getIncomes() {
 }
 
 export async function addIncome(data: { amount: number; source: string; description?: string; incomeDate: string; accountId?: string }) {
+  const { userId } = await requireUserScope();
   try {
     await prisma.$transaction(async (tx) => {
       await tx.income.create({
         data: {
+          userId,
           amount: data.amount,
           source: data.source,
           description: data.description || null,
@@ -685,6 +838,10 @@ export async function addIncome(data: { amount: number; source: string; descript
       });
 
       if (data.accountId) {
+        // Verify account ownership
+        const acc = await tx.account.findUnique({ where: { id: data.accountId } });
+        if (!acc || acc.userId !== userId) throw new Error("Forbidden account selection");
+
         await tx.account.update({
           where: { id: data.accountId },
           data: { balance: { increment: data.amount } },
@@ -693,16 +850,17 @@ export async function addIncome(data: { amount: number; source: string; descript
     });
     revalidateAll();
     return { success: true };
-  } catch {
-    return { success: false, error: 'Failed to add income.' };
+  } catch (e: any) {
+    return { success: false, error: e?.message || 'Failed to add income.' };
   }
 }
 
 export async function updateIncome(id: string, data: { amount: number; source: string; description?: string; incomeDate: string; accountId?: string }) {
+  const { userId } = await requireUserScope();
   try {
     await prisma.$transaction(async (tx) => {
       const oldInc = await tx.income.findUnique({ where: { id } });
-      if (!oldInc) throw new Error('Income not found');
+      if (!oldInc || oldInc.userId !== userId) throw new Error('Forbidden or not found');
 
       // 1. Reverse old income impact
       if (oldInc.accountId) {
@@ -712,8 +870,11 @@ export async function updateIncome(id: string, data: { amount: number; source: s
         });
       }
 
-      // 2. Apply new income impact
+      // 2. Verify and apply new income impact
       if (data.accountId) {
+        const acc = await tx.account.findUnique({ where: { id: data.accountId } });
+        if (!acc || acc.userId !== userId) throw new Error("Forbidden account selection");
+
         await tx.account.update({
           where: { id: data.accountId },
           data: { balance: { increment: data.amount } },
@@ -734,16 +895,17 @@ export async function updateIncome(id: string, data: { amount: number; source: s
     });
     revalidateAll();
     return { success: true };
-  } catch {
-    return { success: false, error: 'Failed to update income.' };
+  } catch (e: any) {
+    return { success: false, error: e?.message || 'Failed to update income.' };
   }
 }
 
 export async function deleteIncome(id: string) {
+  const { userId } = await requireUserScope();
   try {
     await prisma.$transaction(async (tx) => {
       const inc = await tx.income.findUnique({ where: { id } });
-      if (!inc) return;
+      if (!inc || inc.userId !== userId) throw new Error('Forbidden or not found');
 
       if (inc.accountId) {
         await tx.account.update({
@@ -756,13 +918,14 @@ export async function deleteIncome(id: string) {
     });
     revalidateAll();
     return { success: true };
-  } catch {
-    return { success: false, error: 'Failed to delete income.' };
+  } catch (e: any) {
+    return { success: false, error: e?.message || 'Failed to delete income.' };
   }
 }
 
 export async function getAccountDetails(accountId: string) {
-  await ensureDefaults();
+  const { userId } = await requireUserScope();
+  await ensureDefaults(userId);
   const account = await prisma.account.findUnique({
     where: { id: accountId },
     include: {
@@ -771,7 +934,7 @@ export async function getAccountDetails(accountId: string) {
     },
   });
 
-  if (!account) return null;
+  if (!account || account.userId !== userId) return null;
 
   // Build combined chronological transactions list
   const transactions: Array<{
@@ -865,16 +1028,17 @@ export async function getAccountDetails(accountId: string) {
 
 // ─── DASHBOARD ───────────────────────────────────────────────────────────────
 export async function getDashboardStats() {
-  await ensureDefaults();
+  const { userId } = await requireUserScope();
+  await ensureDefaults(userId);
   const now = new Date();
 
   const [allExpenses, allIncomes, budget, settings, accounts, investments] = await Promise.all([
-    prisma.expense.findMany({ include: { category: true }, orderBy: { expenseDate: 'desc' } }),
-    prisma.income.findMany(),
-    prisma.budget.findFirst(),
-    prisma.settings.findFirst(),
+    prisma.expense.findMany({ where: { userId }, include: { category: true }, orderBy: { expenseDate: 'desc' } }),
+    prisma.income.findMany({ where: { userId } }),
+    prisma.budget.findFirst({ where: { userId } }),
+    prisma.settings.findFirst({ where: { userId } }),
     getAccounts(),
-    (prisma as any).investment ? (prisma as any).investment.findMany() : Promise.resolve([]),
+    (prisma as any).investment ? (prisma as any).investment.findMany({ where: { userId } }) : Promise.resolve([]),
   ]);
 
   const todayStart = startOfDay(now), todayEnd = endOfDay(now);
@@ -944,12 +1108,13 @@ export type InvestmentInput = {
 };
 
 export async function addInvestment(data: InvestmentInput): Promise<{ success: boolean; error?: string }> {
+  const { userId } = await requireUserScope();
   try {
     const totalDeduction = data.amount + (data.brokerCharges || 0) + (data.tax || 0);
 
     if (data.accountId) {
       const acc = await prisma.account.findUnique({ where: { id: data.accountId } });
-      if (!acc) return { success: false, error: 'Selected Account not found.' };
+      if (!acc || acc.userId !== userId) return { success: false, error: 'Selected Account not found.' };
       if (acc.balance < totalDeduction) {
         return {
           success: false,
@@ -963,6 +1128,7 @@ export async function addInvestment(data: InvestmentInput): Promise<{ success: b
     await prisma.$transaction(async (tx) => {
       await tx.investment.create({
         data: {
+          userId,
           investmentType: data.investmentType,
           investmentName: data.investmentName,
           broker: data.broker || null,
@@ -997,13 +1163,14 @@ export async function addInvestment(data: InvestmentInput): Promise<{ success: b
 }
 
 export async function updateInvestment(id: string, data: InvestmentInput): Promise<{ success: boolean; error?: string }> {
+  const { userId } = await requireUserScope();
   try {
     const newOutlay = data.amount + (data.brokerCharges || 0) + (data.tax || 0);
     const cValue = data.currentValue !== undefined && !isNaN(data.currentValue) ? data.currentValue : (data.units && data.currentPrice ? data.units * data.currentPrice : data.amount);
 
     await prisma.$transaction(async (tx) => {
       const oldInv = await tx.investment.findUnique({ where: { id } });
-      if (!oldInv) throw new Error('Investment not found');
+      if (!oldInv || oldInv.userId !== userId) throw new Error('Investment not found or unauthorized');
 
       const oldOutlay = oldInv.amount + (oldInv.brokerCharges || 0) + (oldInv.tax || 0);
 
@@ -1018,7 +1185,7 @@ export async function updateInvestment(id: string, data: InvestmentInput): Promi
       // 2. Apply new outlay to new account
       if (data.accountId) {
         const targetAcc = await tx.account.findUnique({ where: { id: data.accountId } });
-        if (!targetAcc) throw new Error('Target account not found');
+        if (!targetAcc || targetAcc.userId !== userId) throw new Error('Target account not found or unauthorized');
         if (targetAcc.balance < newOutlay) {
           throw new Error(`Insufficient balance in ${targetAcc.name}. Available: ₹${targetAcc.balance}`);
         }
@@ -1059,11 +1226,12 @@ export async function updateInvestment(id: string, data: InvestmentInput): Promi
 }
 
 export async function deleteInvestment(id: string): Promise<{ success: boolean; error?: string }> {
+  const { userId } = await requireUserScope();
   try {
     let invName = '';
     await prisma.$transaction(async (tx) => {
       const inv = await tx.investment.findUnique({ where: { id } });
-      if (!inv) return;
+      if (!inv || inv.userId !== userId) throw new Error('Forbidden or not found');
       invName = inv.investmentName;
 
       const outlay = inv.amount + (inv.brokerCharges || 0) + (inv.tax || 0);
@@ -1080,8 +1248,8 @@ export async function deleteInvestment(id: string): Promise<{ success: boolean; 
     await createAuditLog('Investment Deletion', `Deleted investment ${invName || id}`);
     revalidateAll();
     return { success: true };
-  } catch {
-    return { success: false, error: 'Failed to delete investment.' };
+  } catch (e: any) {
+    return { success: false, error: e?.message || 'Failed to delete investment.' };
   }
 }
 
@@ -1102,8 +1270,9 @@ export type InvestmentFilters = {
 };
 
 export async function getInvestments(filters: InvestmentFilters = {}) {
-  await ensureDefaults();
-  const where: any = {};
+  const { userId } = await requireUserScope();
+  await ensureDefaults(userId);
+  const where: any = { userId };
   const now = new Date();
 
   if (filters.type && filters.type !== 'all') {
@@ -1194,8 +1363,9 @@ export async function getInvestments(filters: InvestmentFilters = {}) {
 }
 
 export async function getInvestmentStats() {
-  await ensureDefaults();
-  const investments = (prisma as any).investment ? await (prisma as any).investment.findMany({ include: { account: true } }) : [];
+  const { userId } = await requireUserScope();
+  await ensureDefaults(userId);
+  const investments = (prisma as any).investment ? await (prisma as any).investment.findMany({ where: { userId }, include: { account: true } }) : [];
 
   const totalInvested = (investments as any[]).reduce((s: number, i: any) => s + (i.amount || 0), 0);
   const currentPortfolioValue = (investments as any[]).reduce((s: number, i: any) => s + (i.currentValue || 0), 0);
@@ -1266,6 +1436,7 @@ export async function getInvestmentStats() {
 
 // ─── REPORTS ─────────────────────────────────────────────────────────────────
 export async function getReportData(period: 'daily' | 'weekly' | 'monthly' | 'yearly' = 'monthly', dateFrom?: string, dateTo?: string) {
+  const { userId } = await requireUserScope();
   const now = new Date();
   let start: Date, end: Date;
 
@@ -1275,7 +1446,7 @@ export async function getReportData(period: 'daily' | 'weekly' | 'monthly' | 'ye
   else if (period === 'monthly') { start = startOfMonth(now); end = endOfMonth(now); }
   else { start = startOfYear(now); end = endOfYear(now); }
 
-  const expenses = await prisma.expense.findMany({ where: { expenseDate: { gte: start, lte: end } }, include: { category: true, account: true }, orderBy: { expenseDate: 'desc' } });
+  const expenses = await prisma.expense.findMany({ where: { userId, expenseDate: { gte: start, lte: end } }, include: { category: true, account: true }, orderBy: { expenseDate: 'desc' } });
 
   const total = expenses.reduce((s, e) => s + e.amount, 0);
   const byCategory: Record<string, { value: number; color: string; count: number }> = {};
@@ -1302,4 +1473,46 @@ export async function getReportData(period: 'daily' | 'weekly' | 'monthly' | 'ye
 export async function getExportData(filters: ExpenseFilters = {}) {
   const grouped = await getExpenses(filters);
   return grouped.flatMap(g => g.items);
+}
+
+// ─── IMPERSONATION ───────────────────────────────────────────────────────────
+export async function startImpersonation(targetUserId: string) {
+  const session = await getSession();
+  if (!session || session.role !== 'ADMIN') {
+    return { success: false, error: 'Unauthorized' };
+  }
+  const cookieStore = await cookies();
+  cookieStore.set('et_impersonated_userId', targetUserId, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 60 * 60, // 1 hour
+  });
+  revalidateAll();
+  return { success: true };
+}
+
+export async function stopImpersonation() {
+  const session = await getSession();
+  if (!session || session.role !== 'ADMIN') {
+    return { success: false, error: 'Unauthorized' };
+  }
+  const cookieStore = await cookies();
+  cookieStore.delete('et_impersonated_userId');
+  revalidateAll();
+  return { success: true };
+}
+
+export async function getImpersonationDetails() {
+  const session = await getSession();
+  if (!session || session.role !== 'ADMIN') return null;
+  const cookieStore = await cookies();
+  const impersonateId = cookieStore.get('et_impersonated_userId')?.value;
+  if (!impersonateId) return null;
+  const targetUser = await prisma.user.findUnique({
+    where: { id: impersonateId },
+    select: { id: true, fullName: true, email: true }
+  });
+  return targetUser;
 }
