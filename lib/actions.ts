@@ -142,18 +142,16 @@ export async function getAccounts() {
   await ensureDefaults();
   let accounts: any[] = [];
   try {
-    accounts = await prisma.$queryRawUnsafe(`SELECT * FROM "Account" ORDER BY "name" ASC`);
-    for (const acc of accounts) {
-      const expCount = await prisma.expense.count({ where: { accountId: acc.id } });
-      const incCount = await prisma.income.count({ where: { accountId: acc.id } });
-      acc._count = { expenses: expCount, incomes: incCount };
-      acc.openingBalance = Number(acc.openingBalance ?? acc.opening_balance ?? 0);
-    }
-  } catch {
     accounts = await prisma.account.findMany({
       orderBy: { name: 'asc' },
       include: { _count: { select: { expenses: true, incomes: true } } },
     });
+    for (const acc of accounts) {
+      acc.openingBalance = Number(acc.openingBalance ?? 0);
+    }
+  } catch (e) {
+    console.error('Failed to get accounts:', e);
+    accounts = [];
   }
 
   // Re-verify live balances from transactions to guarantee accuracy using DB openingBalance
@@ -822,8 +820,7 @@ export async function getAccountDetails(accountId: string) {
   // Sort chronologically ascending to compute running balance statement
   transactions.sort((a, b) => a.date.getTime() - b.date.getTime());
 
-  const rawAccList: any[] = await prisma.$queryRawUnsafe(`SELECT * FROM "Account" WHERE "id" = ?`, accountId);
-  const opBalance = Number(rawAccList[0]?.openingBalance ?? rawAccList[0]?.opening_balance ?? (account as any).openingBalance ?? 0);
+  const opBalance = Number(account.openingBalance ?? 0);
   let running = opBalance;
   const ledger = transactions.map((t) => {
     if (t.type === 'income') {

@@ -153,9 +153,19 @@ export async function forgotPasswordAction(email: string) {
   const trimmed = email.trim().toLowerCase();
   let user: any = null;
   try {
-    const rawUsers: any[] = await prisma.$queryRawUnsafe(`SELECT * FROM "User" WHERE LOWER("email") = ? LIMIT 1`, trimmed);
-    user = rawUsers[0];
-  } catch {}
+    user = await prisma.user.findFirst({
+      where: {
+        email: {
+          equals: trimmed,
+          mode: 'insensitive',
+        },
+      },
+    });
+  } catch {
+    try {
+      user = await prisma.user.findUnique({ where: { email: trimmed } });
+    } catch {}
+  }
 
   if (user) {
     await createAuditLog('Forgot Password Requested', `Password reset token requested for ${trimmed}`, {
