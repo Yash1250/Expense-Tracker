@@ -2,6 +2,8 @@ import { getAccountDetails, getSettings } from '@/lib/actions';
 import AccountDetailsClient from '@/components/AccountDetailsClient';
 import { notFound } from 'next/navigation';
 
+export const dynamic = 'force-dynamic';
+
 type Props = {
   params: Promise<{ id: string }>;
 };

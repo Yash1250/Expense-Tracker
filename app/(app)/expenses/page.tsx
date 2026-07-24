@@ -1,6 +1,8 @@
 import { getExpenses, getCategories, getAccounts, getSettings, getExpenseYears, type ExpenseFilters } from '@/lib/actions';
 import ExpensesListClient from '@/components/ExpensesListClient';
 
+export const dynamic = 'force-dynamic';
+
 type Props = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
