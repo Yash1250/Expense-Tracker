@@ -55,6 +55,14 @@ export async function requireUserScope() {
 
 // ─── SEED HELPERS ────────────────────────────────────────────────────────────
 async function ensureDefaults(userId: string) {
+  // Drop the legacy global unique constraint on category name if it exists in PostgreSQL
+  try {
+    await prisma.$executeRawUnsafe('ALTER TABLE "Category" DROP CONSTRAINT IF EXISTS "Category_name_key";');
+    await prisma.$executeRawUnsafe('DROP INDEX IF EXISTS "Category_name_key";');
+  } catch (err) {
+    // Ignore if not supported (e.g., SQLite locally) or index doesn't exist
+  }
+
   // Default categories
   const defaultCats = [
     { name: 'Food', icon: '🍔', color: '#f97316' },
