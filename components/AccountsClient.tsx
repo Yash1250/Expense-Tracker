@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Plus, Pencil, Trash2, X, Check, Wallet, ChevronRight, ShieldCheck, ShieldAlert, ArrowUpRight } from 'lucide-react';
 import { createAccount, updateAccount, deleteAccount } from '@/lib/actions';
 import { useRouter } from 'next/navigation';
+import AppModal from '@/components/AppModal';
 
 const ACCOUNT_TYPES = ['cash', 'bank', 'credit_card', 'wallet', 'savings', 'other'];
 const ICONS = ['💵', '🏦', '💳', '👛', '💰', '🏧', '📱', '💎', '📈', '🏠'];
@@ -237,207 +238,204 @@ export default function AccountsClient({ initialAccounts, currency = '₹' }: { 
       </div>
 
       {/* Add / Edit Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-0 md:p-4" onClick={e => { if (e.target === e.currentTarget) setShowModal(false); }}>
-          <div className="bg-white dark:bg-zinc-900 w-full md:max-w-md rounded-t-3xl md:rounded-3xl shadow-2xl max-h-[90vh] flex flex-col overflow-hidden pb-[env(safe-area-inset-bottom)] md:pb-0 animate-in fade-in slide-in-from-bottom-5 duration-200">
-            <div className="flex justify-between items-center pb-3 border-b border-zinc-100 dark:border-zinc-800 shrink-0">
-              <h3 className="font-bold text-lg">{editAcc ? 'Edit Account' : 'Add Account'}</h3>
-              <button onClick={() => setShowModal(false)} className="p-1.5 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400">
-                <X size={18} />
-              </button>
+      <AppModal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        title={editAcc ? 'Edit Account' : 'Add Account'}
+        footer={
+          <div className="flex gap-3 w-full">
+            <button
+              onClick={() => setShowModal(false)}
+              className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={isPending}
+              className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-60 flex items-center justify-center gap-1 transition-colors shadow-sm"
+            >
+              <Check size={16} />
+              {isPending ? 'Saving…' : 'Save Account'}
+            </button>
+          </div>
+        }
+      >
+        {formError && (
+          <p className="text-xs text-red-500 bg-red-50 dark:bg-red-950/30 px-3 py-2 rounded-xl border border-red-200 dark:border-red-900/50">
+            {formError}
+          </p>
+        )}
+
+        <div>
+          <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Account Name</label>
+          <input
+            type="text"
+            placeholder="e.g. HDFC Bank, Cash Wallet"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Account Type</label>
+            <select
+              value={type}
+              onChange={e => setType(e.target.value)}
+              className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 capitalize"
+            >
+              {ACCOUNT_TYPES.map(t => (
+                <option key={t} value={t}>
+                  {t.replace('_', ' ')}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Status</label>
+            <select
+              value={status}
+              onChange={e => setStatus(e.target.value)}
+              className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <div className="flex justify-between items-center mb-1">
+            <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Opening Balance ({currency})</label>
+            <span className="text-[11px] text-zinc-400">Starting funds before expenses</span>
+          </div>
+          <input
+            type="number"
+            placeholder="0.00"
+            value={openingBalance}
+            onChange={e => setOpeningBalance(e.target.value)}
+            className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          />
+        </div>
+
+        {editAcc && (
+          <div className="bg-slate-50 dark:bg-zinc-800/60 p-3.5 rounded-2xl border border-slate-200/80 dark:border-zinc-700/80 text-xs space-y-2">
+            <div className="flex justify-between text-zinc-500">
+              <span>Opening Balance:</span>
+              <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                +{currency}{Number(openingBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+            <div className="flex justify-between text-zinc-500">
+              <span>Transactions Net Impact (Income - Expenses):</span>
+              <span className={`font-semibold ${editAcc.balance - (editAcc.openingBalance ?? 0) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                {editAcc.balance - (editAcc.openingBalance ?? 0) >= 0 ? '+' : ''}
+                {currency}{(editAcc.balance - (editAcc.openingBalance ?? 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+            <div className="flex justify-between font-bold border-t border-slate-200 dark:border-zinc-700 pt-2 text-zinc-900 dark:text-zinc-100 text-sm">
+              <span>Resulting Available Balance:</span>
+              <span className={(Number(openingBalance || 0) + (editAcc.balance - (editAcc.openingBalance ?? 0))) < 0 ? 'text-red-500' : 'text-emerald-600'}>
+                {currency}{(Number(openingBalance || 0) + (editAcc.balance - (editAcc.openingBalance ?? 0))).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </span>
             </div>
 
-            <div className="flex-1 overflow-y-auto py-4 space-y-4 text-left pr-1">
-              {formError && (
-                <p className="text-xs text-red-500 bg-red-50 dark:bg-red-950/30 px-3 py-2 rounded-xl border border-red-200 dark:border-red-900/50">
-                  {formError}
-                </p>
-              )}
-
-              <div>
-                <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Account Name</label>
-                <input
-                  type="text"
-                  placeholder="e.g. HDFC Bank, Cash Wallet"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Account Type</label>
-                  <select
-                    value={type}
-                    onChange={e => setType(e.target.value)}
-                    className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 capitalize"
-                  >
-                    {ACCOUNT_TYPES.map(t => (
-                      <option key={t} value={t}>
-                        {t.replace('_', ' ')}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Status</label>
-                  <select
-                    value={status}
-                    onChange={e => setStatus(e.target.value)}
-                    className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Opening Balance ({currency})</label>
-                  <span className="text-[11px] text-zinc-400">Starting funds before expenses</span>
-                </div>
-                <input
-                  type="number"
-                  placeholder="0.00"
-                  value={openingBalance}
-                  onChange={e => setOpeningBalance(e.target.value)}
-                  className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                />
-              </div>
-
-              {editAcc && (
-                <div className="bg-slate-50 dark:bg-zinc-800/60 p-3.5 rounded-2xl border border-slate-200/80 dark:border-zinc-700/80 text-xs space-y-2">
-                  <div className="flex justify-between text-zinc-500">
-                    <span>Opening Balance:</span>
-                    <span className="font-semibold text-zinc-800 dark:text-zinc-200">
-                      +{currency}{Number(openingBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-zinc-500">
-                    <span>Transactions Net Impact (Income - Expenses):</span>
-                    <span className={`font-semibold ${editAcc.balance - (editAcc.openingBalance ?? 0) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                      {editAcc.balance - (editAcc.openingBalance ?? 0) >= 0 ? '+' : ''}
-                      {currency}{(editAcc.balance - (editAcc.openingBalance ?? 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                  <div className="flex justify-between font-bold border-t border-slate-200 dark:border-zinc-700 pt-2 text-zinc-900 dark:text-zinc-100 text-sm">
-                    <span>Resulting Available Balance:</span>
-                    <span className={(Number(openingBalance || 0) + (editAcc.balance - (editAcc.openingBalance ?? 0))) < 0 ? 'text-red-500' : 'text-emerald-600'}>
-                      {currency}{(Number(openingBalance || 0) + (editAcc.balance - (editAcc.openingBalance ?? 0))).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                    </span>
-                  </div>
-
-                  <div className="pt-1.5 border-t border-zinc-200/60 dark:border-zinc-700/50 flex items-center justify-between gap-2">
-                    <span className="text-[11px] text-zinc-500">Want Current Balance to be a specific amount?</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const targetStr = prompt(`Enter desired Current Available Balance in ${currency}:`, '200');
-                        if (targetStr !== null) {
-                          const targetNum = parseFloat(targetStr);
-                          if (!isNaN(targetNum)) {
-                            const txNet = editAcc.balance - (editAcc.openingBalance ?? 0);
-                            const requiredOpening = targetNum - txNet;
-                            setOpeningBalance(requiredOpening.toString());
-                          }
-                        }
-                      }}
-                      className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline shrink-0"
-                    >
-                      Set Desired Balance
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Icon</label>
-                <div className="flex flex-wrap gap-2 mt-1.5">
-                  {ICONS.map(i => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => setIcon(i)}
-                      className={`w-9 h-9 rounded-xl text-lg flex items-center justify-center transition-all ${
-                        icon === i ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/30' : 'bg-zinc-100 dark:bg-zinc-800'
-                      }`}
-                    >
-                      {i}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Theme Color</label>
-                <div className="flex flex-wrap gap-2 mt-1.5">
-                  {COLORS.map(c => (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => setColor(c)}
-                      className={`w-7 h-7 rounded-full transition-all ${color === c ? 'ring-2 ring-offset-2 ring-blue-500' : ''}`}
-                      style={{ backgroundColor: c }}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex gap-3 pt-3 border-t border-zinc-100 dark:border-zinc-800 shrink-0">
+            <div className="pt-1.5 border-t border-zinc-200/60 dark:border-zinc-700/50 flex items-center justify-between gap-2">
+              <span className="text-[11px] text-zinc-500">Want Current Balance to be a specific amount?</span>
               <button
-                onClick={() => setShowModal(false)}
-                className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+                type="button"
+                onClick={() => {
+                  const targetStr = prompt(`Enter desired Current Available Balance in ${currency}:`, '200');
+                  if (targetStr !== null) {
+                    const targetNum = parseFloat(targetStr);
+                    if (!isNaN(targetNum)) {
+                      const txNet = editAcc.balance - (editAcc.openingBalance ?? 0);
+                      const requiredOpening = targetNum - txNet;
+                      setOpeningBalance(requiredOpening.toString());
+                    }
+                  }
+                }}
+                className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline shrink-0"
               >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={isPending}
-                className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-60 flex items-center justify-center gap-1 transition-colors shadow-sm"
-              >
-                <Check size={16} />
-                {isPending ? 'Saving…' : 'Save Account'}
+                Set Desired Balance
               </button>
             </div>
           </div>
+        )}
+
+        <div>
+          <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Icon</label>
+          <div className="flex flex-wrap gap-2 mt-1.5">
+            {ICONS.map(i => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => setIcon(i)}
+                className={`w-9 h-9 rounded-xl text-lg flex items-center justify-center transition-all ${
+                  icon === i ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/30' : 'bg-zinc-100 dark:bg-zinc-800'
+                }`}
+              >
+                {i}
+              </button>
+            ))}
+          </div>
         </div>
-      )}
+
+        <div>
+          <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Theme Color</label>
+          <div className="flex flex-wrap gap-2 mt-1.5">
+            {COLORS.map(c => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setColor(c)}
+                className={`w-7 h-7 rounded-full transition-all ${color === c ? 'ring-2 ring-offset-2 ring-blue-500' : ''}`}
+                style={{ backgroundColor: c }}
+              />
+            ))}
+          </div>
+        </div>
+      </AppModal>
 
       {/* Delete Modal */}
-      {deletingId && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl p-6 max-w-sm w-full text-left">
-            <h3 className="font-bold text-lg mb-2">Delete Account?</h3>
-            {deleteError ? (
-              <p className="text-xs text-red-500 bg-red-50 dark:bg-red-950/30 px-3 py-2 rounded-xl mb-4 border border-red-200 dark:border-red-900">{deleteError}</p>
-            ) : (
-              <p className="text-zinc-500 text-sm mb-5">This action cannot be undone.</p>
-            )}
-            <div className="flex gap-3">
-              <button
-                onClick={() => {
-                  setDeletingId(null);
-                  setDeleteError('');
-                }}
-                className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleDelete(deletingId)}
-                disabled={isPending || !!deleteError}
-                className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-medium disabled:opacity-60 transition-colors"
-              >
-                {isPending ? 'Deleting…' : 'Delete'}
-              </button>
-            </div>
+      <AppModal
+        isOpen={!!deletingId}
+        onClose={() => {
+          setDeletingId(null);
+          setDeleteError('');
+        }}
+        title="Delete Account?"
+        size="sm"
+        footer={
+          <div className="flex gap-3 w-full">
+            <button
+              onClick={() => {
+                setDeletingId(null);
+                setDeleteError('');
+              }}
+              className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-medium"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => handleDelete(deletingId!)}
+              disabled={isPending || !!deleteError}
+              className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-medium disabled:opacity-60 transition-colors"
+            >
+              {isPending ? 'Deleting…' : 'Delete'}
+            </button>
           </div>
-        </div>
-      )}
+        }
+      >
+        {deleteError ? (
+          <p className="text-xs text-red-500 bg-red-50 dark:bg-red-950/30 px-3 py-2 rounded-xl mb-4 border border-red-200 dark:border-red-900">{deleteError}</p>
+        ) : (
+          <p className="text-zinc-500 text-sm">This action cannot be undone.</p>
+        )}
+      </AppModal>
     </div>
   );
 }

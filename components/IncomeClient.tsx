@@ -4,6 +4,7 @@ import { useState, useTransition, useEffect } from 'react';
 import { Plus, Pencil, Trash2, X, Check, TrendingDown } from 'lucide-react';
 import { addIncome, updateIncome, deleteIncome } from '@/lib/actions';
 import { useRouter } from 'next/navigation';
+import AppModal from '@/components/AppModal';
 import ExportDropdown from '@/components/ExportDropdown';
 import { exportToPDF, exportToCSV, exportToExcel, exportToPrint } from '@/lib/export-utils';
 
@@ -163,68 +164,64 @@ export default function IncomeClient({ initialData, accounts, currency }: { init
       </div>
 
       {/* Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-0 md:p-4" onClick={e => { if (e.target === e.currentTarget) setShowModal(false); }}>
-          <div className="bg-white dark:bg-zinc-900 w-full md:max-w-md rounded-t-3xl md:rounded-3xl shadow-2xl max-h-[90vh] flex flex-col overflow-hidden pb-[env(safe-area-inset-bottom)] md:pb-0 animate-in fade-in slide-in-from-bottom-5 duration-200">
-            <div className="flex-shrink-0 flex justify-between items-center px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 bg-blue-600 text-white rounded-t-3xl md:rounded-t-none">
-              <h3 className="font-bold text-lg">{editItem ? 'Edit Income' : 'Add Income'}</h3>
-              <button onClick={() => setShowModal(false)} className="p-1 rounded-full bg-white/20 hover:bg-white/30 text-white transition"><X size={18} /></button>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              {formError && <p className="text-sm text-red-500 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-xl">{formError}</p>}
-              <div>
-                <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Amount</label>
-                <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-3 text-lg font-bold outline-none focus:ring-2 focus:ring-emerald-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" autoFocus />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Source</label>
-                <select value={source} onChange={e => setSource(e.target.value)} className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-emerald-500">
-                  {INCOME_SOURCES.map(s => <option key={s}>{s}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Date</label>
-                <input type="date" value={incomeDate} onChange={e => setIncomeDate(e.target.value)} className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-emerald-500" />
-              </div>
-              {accounts.length > 0 && (
-                <div>
-                  <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Account</label>
-                  <select value={accountId} onChange={e => setAccountId(e.target.value)} className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-emerald-500">
-                    <option value="">No account</option>
-                    {accounts.map(a => <option key={a.id} value={a.id}>{a.icon} {a.name}</option>)}
-                  </select>
-                </div>
-              )}
-              <div>
-                <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Description</label>
-                <input type="text" value={description} onChange={e => setDescription(e.target.value)} placeholder="Optional note" className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-emerald-500" />
-              </div>
-            </div>
-            
-            <div className="flex-shrink-0 bg-zinc-50 dark:bg-zinc-800/40 border-t border-zinc-100 dark:border-zinc-800/80 px-6 py-4 flex gap-3">
-              <button onClick={() => setShowModal(false)} className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-medium text-zinc-600 dark:text-zinc-400">Cancel</button>
-              <button onClick={handleSave} disabled={isPending} className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium disabled:opacity-60 flex items-center justify-center gap-1">
-                <Check size={15} />{isPending ? 'Saving…' : 'Save'}
-              </button>
-            </div>
+      <AppModal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        title={editItem ? 'Edit Income' : 'Add Income'}
+        footer={
+          <div className="flex gap-3 w-full">
+            <button onClick={() => setShowModal(false)} className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-medium text-zinc-600 dark:text-zinc-400">Cancel</button>
+            <button onClick={handleSave} disabled={isPending} className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium disabled:opacity-60 flex items-center justify-center gap-1">
+              <Check size={15} />{isPending ? 'Saving…' : 'Save'}
+            </button>
           </div>
+        }
+      >
+        {formError && <p className="text-sm text-red-500 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-xl">{formError}</p>}
+        <div>
+          <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Amount</label>
+          <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-3 text-lg font-bold outline-none focus:ring-2 focus:ring-emerald-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" autoFocus />
         </div>
-      )}
+        <div>
+          <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Source</label>
+          <select value={source} onChange={e => setSource(e.target.value)} className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-emerald-500">
+            {INCOME_SOURCES.map(s => <option key={s}>{s}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Date</label>
+          <input type="date" value={incomeDate} onChange={e => setIncomeDate(e.target.value)} className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-emerald-500" />
+        </div>
+        {accounts.length > 0 && (
+          <div>
+            <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Account</label>
+            <select value={accountId} onChange={e => setAccountId(e.target.value)} className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-emerald-500">
+              <option value="">No account</option>
+              {accounts.map(a => <option key={a.id} value={a.id}>{a.icon} {a.name}</option>)}
+            </select>
+          </div>
+        )}
+        <div>
+          <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Description</label>
+          <input type="text" value={description} onChange={e => setDescription(e.target.value)} placeholder="Optional note" className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-emerald-500" />
+        </div>
+      </AppModal>
 
       {/* Delete confirm */}
-      {deletingId && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl p-6 max-w-sm w-full">
-            <h3 className="font-bold text-lg mb-2">Delete Income?</h3>
-            <p className="text-zinc-500 text-sm mb-5">This cannot be undone.</p>
-            <div className="flex gap-3">
-              <button onClick={() => setDeletingId(null)} className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-medium">Cancel</button>
-              <button onClick={() => handleDelete(deletingId)} disabled={isPending} className="flex-1 py-2.5 rounded-xl bg-red-500 text-white text-sm font-medium disabled:opacity-60">{isPending ? 'Deleting…' : 'Delete'}</button>
-            </div>
+      <AppModal
+        isOpen={!!deletingId}
+        onClose={() => setDeletingId(null)}
+        title="Delete Income?"
+        size="sm"
+        footer={
+          <div className="flex gap-3 w-full">
+            <button onClick={() => setDeletingId(null)} className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-medium">Cancel</button>
+            <button onClick={() => handleDelete(deletingId!)} disabled={isPending} className="flex-1 py-2.5 rounded-xl bg-red-500 text-white text-sm font-medium disabled:opacity-60">{isPending ? 'Deleting…' : 'Delete'}</button>
           </div>
-        </div>
-      )}
+        }
+      >
+        <p className="text-zinc-500 text-sm">This cannot be undone.</p>
+      </AppModal>
     </div>
   );
 }

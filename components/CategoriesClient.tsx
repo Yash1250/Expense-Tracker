@@ -4,6 +4,7 @@ import { useState, useTransition, useEffect } from 'react';
 import { Plus, Pencil, Trash2, ToggleLeft, ToggleRight, X, Check } from 'lucide-react';
 import { createCategory, updateCategory, deleteCategory, toggleCategory } from '@/lib/actions';
 import { useRouter } from 'next/navigation';
+import AppModal from '@/components/AppModal';
 import ExportDropdown from '@/components/ExportDropdown';
 import { exportToPDF, exportToCSV, exportToExcel, exportToPrint } from '@/lib/export-utils';
 
@@ -134,62 +135,58 @@ export default function CategoriesClient({ initialCategories }: { initialCategor
       </div>
 
       {/* Create/Edit modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-0 md:p-4 animate-in fade-in duration-200" onClick={e => { if (e.target === e.currentTarget) setShowModal(false); }}>
-          <div className="bg-white dark:bg-zinc-900 w-full md:max-w-md rounded-t-3xl md:rounded-3xl shadow-2xl max-h-[90vh] flex flex-col overflow-hidden pb-[env(safe-area-inset-bottom)] md:pb-0 animate-in fade-in slide-in-from-bottom-5 duration-200">
-            <div className="flex-shrink-0 bg-blue-600 text-white px-6 py-4 flex items-center justify-between rounded-t-3xl md:rounded-t-none">
-              <h3 className="font-bold text-lg">{editCat ? 'Edit Category' : 'Add Category'}</h3>
-              <button onClick={() => setShowModal(false)} className="p-1 rounded-full bg-white/20 hover:bg-white/30 text-white transition"><X size={18} /></button>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto p-6 space-y-4 text-left">
-              {formError && <p className="text-sm text-red-500 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-xl mb-3">{formError}</p>}
-              <div>
-                <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Name</label>
-                <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Category name" className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Icon</label>
-                <div className="flex flex-wrap gap-2 mt-1.5">
-                  {ICON_OPTIONS.map(i => <button key={i} type="button" onClick={() => setIcon(i)} className={`w-9 h-9 rounded-xl text-lg transition-all ${icon === i ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/30' : 'bg-zinc-100 dark:bg-zinc-800'}`}>{i}</button>)}
-                </div>
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Color</label>
-                <div className="flex flex-wrap gap-2 mt-1.5">
-                  {COLOR_OPTIONS.map(c => <button key={c} type="button" onClick={() => setColor(c)} className={`w-7 h-7 rounded-full transition-all ${color === c ? 'ring-2 ring-offset-2 ring-blue-500' : ''}`} style={{ backgroundColor: c }} />)}
-                </div>
-              </div>
-              {/* Preview */}
-              <div className="flex items-center gap-3 p-3 bg-zinc-50 dark:bg-zinc-800 rounded-2xl">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl" style={{ backgroundColor: color + '22' }}>{icon}</div>
-                <div><p className="font-semibold">{name || 'Category Name'}</p><div className="w-3 h-3 rounded-full mt-1" style={{ backgroundColor: color }} /></div>
-              </div>
-            </div>
-            
-            <div className="flex-shrink-0 bg-zinc-50 dark:bg-zinc-800/40 border-t border-zinc-100 dark:border-zinc-800/80 px-6 py-4 flex gap-3">
-              <button onClick={() => setShowModal(false)} className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-medium text-zinc-600 dark:text-zinc-400">Cancel</button>
-              <button onClick={handleSave} disabled={isPending} className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium disabled:opacity-60 flex items-center justify-center gap-1">
-                <Check size={15} />{isPending ? 'Saving…' : 'Save'}
-              </button>
-            </div>
+      <AppModal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        title={editCat ? 'Edit Category' : 'Add Category'}
+        footer={
+          <div className="flex gap-3 w-full">
+            <button onClick={() => setShowModal(false)} className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-medium text-zinc-600 dark:text-zinc-400">Cancel</button>
+            <button onClick={handleSave} disabled={isPending} className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium disabled:opacity-60 flex items-center justify-center gap-1">
+              <Check size={15} />{isPending ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        }
+      >
+        {formError && <p className="text-sm text-red-500 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-xl mb-3">{formError}</p>}
+        <div>
+          <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Name</label>
+          <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Category name" className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Icon</label>
+          <div className="flex flex-wrap gap-2 mt-1.5">
+            {ICON_OPTIONS.map(i => <button key={i} type="button" onClick={() => setIcon(i)} className={`w-9 h-9 rounded-xl text-lg transition-all ${icon === i ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/30' : 'bg-zinc-100 dark:bg-zinc-800'}`}>{i}</button>)}
           </div>
         </div>
-      )}
+        <div>
+          <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Color</label>
+          <div className="flex flex-wrap gap-2 mt-1.5">
+            {COLOR_OPTIONS.map(c => <button key={c} type="button" onClick={() => setColor(c)} className={`w-7 h-7 rounded-full transition-all ${color === c ? 'ring-2 ring-offset-2 ring-blue-500' : ''}`} style={{ backgroundColor: c }} />)}
+          </div>
+        </div>
+        {/* Preview */}
+        <div className="flex items-center gap-3 p-3 bg-zinc-50 dark:bg-zinc-800 rounded-2xl">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl" style={{ backgroundColor: color + '22' }}>{icon}</div>
+          <div><p className="font-semibold">{name || 'Category Name'}</p><div className="w-3 h-3 rounded-full mt-1" style={{ backgroundColor: color }} /></div>
+        </div>
+      </AppModal>
 
       {/* Delete confirmation */}
-      {deletingId && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl p-6 max-w-sm w-full">
-            <h3 className="font-bold text-lg mb-2">Delete Category?</h3>
-            {deleteError ? <p className="text-sm text-red-500 mb-3">{deleteError}</p> : <p className="text-zinc-500 text-sm mb-5">This cannot be undone.</p>}
-            <div className="flex gap-3">
-              <button onClick={() => { setDeletingId(null); setDeleteError(''); }} className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-medium">Cancel</button>
-              <button onClick={() => handleDelete(deletingId)} disabled={isPending || !!deleteError} className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-medium disabled:opacity-60">{isPending ? 'Deleting…' : 'Delete'}</button>
-            </div>
+      <AppModal
+        isOpen={!!deletingId}
+        onClose={() => { setDeletingId(null); setDeleteError(''); }}
+        title="Delete Category?"
+        size="sm"
+        footer={
+          <div className="flex gap-3 w-full">
+            <button onClick={() => { setDeletingId(null); setDeleteError(''); }} className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-medium">Cancel</button>
+            <button onClick={() => handleDelete(deletingId!)} disabled={isPending || !!deleteError} className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-medium disabled:opacity-60">{isPending ? 'Deleting…' : 'Delete'}</button>
           </div>
-        </div>
-      )}
+        }
+      >
+        {deleteError ? <p className="text-sm text-red-500 mb-3">{deleteError}</p> : <p className="text-zinc-500 text-sm">This cannot be undone.</p>}
+      </AppModal>
     </div>
   );
 }

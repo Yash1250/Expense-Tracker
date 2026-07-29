@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { createUser, updateUser, toggleUserStatus, resetUserPassword, deleteUser } from '@/lib/user-actions';
 import { startImpersonation } from '@/lib/actions';
+import AppModal from '@/components/AppModal';
 
 type UserItem = {
   id: string;
@@ -370,122 +371,134 @@ export default function UsersClient({ initialUsers }: { initialUsers: UserItem[]
       </div>
 
       {/* Create / Edit User Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-0 md:p-4 animate-in fade-in duration-200" onClick={e => { if (e.target === e.currentTarget) setShowCreateModal(false); }}>
-          <div className="bg-white dark:bg-zinc-900 w-full md:max-w-md rounded-t-3xl md:rounded-3xl shadow-2xl max-h-[90vh] flex flex-col overflow-hidden pb-[env(safe-area-inset-bottom)] md:pb-0 animate-in fade-in slide-in-from-bottom-5 duration-200">
-            <div className="flex-shrink-0 bg-blue-600 text-white px-6 py-4 flex items-center justify-between rounded-t-3xl md:rounded-t-none">
-              <h3 className="font-bold text-lg">{editUserItem ? 'Edit User' : 'Create New User'}</h3>
-              <button onClick={() => setShowCreateModal(false)} className="p-1 rounded-full bg-white/20 hover:bg-white/30 text-white transition">
-                <X size={18} />
-              </button>
-            </div>
+      <AppModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        title={editUserItem ? 'Edit User' : 'Create New User'}
+        footer={
+          <div className="flex gap-3 w-full">
+            <button
+              onClick={() => setShowCreateModal(false)}
+              className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-zinc-700 text-sm font-medium text-slate-600 dark:text-zinc-400 hover:bg-slate-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSaveUser}
+              disabled={isPending}
+              className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-60 flex items-center justify-center gap-1 shadow-sm transition-colors"
+            >
+              <Check size={16} /> {isPending ? 'Saving…' : 'Save User'}
+            </button>
+          </div>
+        }
+      >
+        {formError && (
+          <p className="text-xs text-red-500 bg-red-50 dark:bg-red-950/30 px-3 py-2 rounded-xl border border-red-200 dark:border-red-900/50">
+            {formError}
+          </p>
+        )}
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-4 text-left">
-              {formError && (
-                <p className="text-xs text-red-500 bg-red-50 dark:bg-red-950/30 px-3 py-2 rounded-xl border border-red-200 dark:border-red-900/50">
-                  {formError}
-                </p>
-              )}
+        <div>
+          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Full Name *</label>
+          <input
+            type="text"
+            placeholder="e.g. Rahul Sharma"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            className="w-full mt-1.5 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600"
+          />
+        </div>
 
-              <div>
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Full Name *</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Rahul Sharma"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  className="w-full mt-1.5 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600"
-                />
-              </div>
+        <div>
+          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Email Address *</label>
+          <input
+            type="email"
+            placeholder="rahul@example.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full mt-1.5 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600"
+          />
+        </div>
 
-              <div>
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Email Address *</label>
-                <input
-                  type="email"
-                  placeholder="rahul@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full mt-1.5 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600"
-                />
-              </div>
+        <div>
+          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Phone Number</label>
+          <input
+            type="text"
+            placeholder="+91 98765 43210"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className="w-full mt-1.5 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600"
+          />
+        </div>
 
-              <div>
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Phone Number</label>
-                <input
-                  type="text"
-                  placeholder="+91 98765 43210"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  className="w-full mt-1.5 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600"
-                />
-              </div>
+        {!editUserItem && (
+          <div>
+            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Initial Password *</label>
+            <input
+              type="password"
+              placeholder="At least 6 characters"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full mt-1.5 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600"
+            />
+          </div>
+        )}
 
-              {!editUserItem && (
-                <div>
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Initial Password *</label>
-                  <input
-                    type="password"
-                    placeholder="At least 6 characters"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full mt-1.5 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600"
-                  />
-                </div>
-              )}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">RBAC Role</label>
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value as 'ADMIN' | 'USER')}
+              className="w-full mt-1.5 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600"
+            >
+              <option value="USER">Normal User</option>
+              <option value="ADMIN">System Admin</option>
+            </select>
+          </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">RBAC Role</label>
-                  <select
-                    value={role}
-                    onChange={(e) => setRole(e.target.value as 'ADMIN' | 'USER')}
-                    className="w-full mt-1.5 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600"
-                  >
-                    <option value="USER">Normal User</option>
-                    <option value="ADMIN">System Admin</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</label>
-                  <select
-                    value={status}
-                    onChange={(e) => setStatus(e.target.value)}
-                    className="w-full mt-1.5 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600"
-                  >
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex-shrink-0 bg-zinc-50 dark:bg-zinc-800/40 border-t border-zinc-100 dark:border-zinc-800/80 px-6 py-4 flex gap-3">
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-zinc-700 text-sm font-medium text-slate-600 dark:text-zinc-400 hover:bg-slate-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveUser}
-                disabled={isPending}
-                className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-60 flex items-center justify-center gap-1 shadow-sm transition-colors"
-              >
-                <Check size={16} /> {isPending ? 'Saving…' : 'Save User'}
-              </button>
-            </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</label>
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              className="w-full mt-1.5 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600"
+            >
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
           </div>
         </div>
-      )}
+      </AppModal>
 
       {/* Reset Password Modal */}
-      {resetPwdUser && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl p-6 max-w-sm w-full animate-in fade-in zoom-in-95 duration-200">
-            <h3 className="font-bold text-lg mb-1">Reset Password</h3>
+      <AppModal
+        isOpen={!!resetPwdUser}
+        onClose={() => setResetPwdUser(null)}
+        title="Reset Password"
+        size="sm"
+        footer={
+          <div className="flex gap-3 w-full">
+            <button
+              onClick={() => setResetPwdUser(null)}
+              className="flex-1 py-2 rounded-xl border border-slate-200 text-xs font-medium"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleResetPassword}
+              disabled={isPending}
+              className="flex-1 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold shadow-sm"
+            >
+              Reset Password
+            </button>
+          </div>
+        }
+      >
+        {resetPwdUser && (
+          <>
             <p className="text-xs text-slate-500 mb-4">Set a new password for {resetPwdUser.fullName} ({resetPwdUser.email})</p>
-
             <input
               type="password"
               placeholder="Enter new password"
@@ -493,25 +506,9 @@ export default function UsersClient({ initialUsers }: { initialUsers: UserItem[]
               onChange={(e) => setNewPasswordInput(e.target.value)}
               className="w-full bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600 mb-4"
             />
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => setResetPwdUser(null)}
-                className="flex-1 py-2 rounded-xl border border-slate-200 text-xs font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleResetPassword}
-                disabled={isPending}
-                className="flex-1 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold shadow-sm"
-              >
-                Reset Password
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </AppModal>
     </div>
   );
 }

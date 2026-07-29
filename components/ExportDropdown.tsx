@@ -28,8 +28,8 @@ export default function ExportDropdown({ onExport, className = '' }: Props) {
   };
 
   return (
-    <div className={`relative inline-block text-left ${className}`} ref={dropdownRef}>
-      <div className="flex items-center rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm overflow-hidden">
+    <div className={`relative inline-flex items-stretch ${className}`} ref={dropdownRef}>
+      <div className="flex items-stretch rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm overflow-hidden w-full">
         {/* Main button: trigger PDF on mobile, toggle menu on desktop */}
         <button
           onClick={() => {
@@ -40,18 +40,17 @@ export default function ExportDropdown({ onExport, className = '' }: Props) {
             }
           }}
           type="button"
-          className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors"
+          className="flex-1 flex items-center justify-center gap-1.5 px-3 text-sm font-semibold hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors whitespace-nowrap"
         >
           <Download size={15} />
-          <span className="hidden md:inline">Export</span>
-          <span className="md:hidden">Export PDF</span>
+          <span>Export</span>
         </button>
 
         {/* Separator / Arrow button */}
         <button
           onClick={() => setIsOpen(!isOpen)}
           type="button"
-          className="border-l border-zinc-200 dark:border-zinc-700 p-2 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-500 transition-colors"
+          className="border-l border-zinc-200 dark:border-zinc-700 px-2 flex items-center justify-center hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-500 transition-colors"
           aria-label="Export options"
         >
           <ChevronDown size={14} className={`transform transition-transform ${isOpen ? 'rotate-180' : ''}`} />

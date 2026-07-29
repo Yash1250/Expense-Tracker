@@ -95,10 +95,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         >
           {children}
         </main>
+        {/* Fixed bottom nav for mobile — always on top */}
+        <BottomNav role={role} />
       </div>
-
-      {/* Fixed bottom nav for mobile — always on top */}
-      <BottomNav role={role} />
     </>
   );
 }

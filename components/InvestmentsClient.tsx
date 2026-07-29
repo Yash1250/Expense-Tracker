@@ -11,6 +11,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, 
 import { addInvestment, updateInvestment, deleteInvestment, InvestmentInput } from '@/lib/actions';
 import ExportDropdown from '@/components/ExportDropdown';
 import { exportToPDF, exportToCSV, exportToExcel, exportToPrint } from '@/lib/export-utils';
+import AppModal from '@/components/AppModal';
 
 const INVESTMENT_TYPES = [
   'Stocks', 'Mutual Funds', 'SIP', 'IPO', 'Gold', 'Silver',
@@ -717,283 +718,289 @@ export default function InvestmentsClient({ initialInvestments, stats, accounts,
       </div>
 
       {/* Add / Edit Investment Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-0 md:p-4" onClick={e => { if (e.target === e.currentTarget) setShowModal(false); }}>
-          <div className="bg-white dark:bg-zinc-900 w-full md:max-w-lg rounded-t-3xl md:rounded-3xl shadow-2xl max-h-[90vh] flex flex-col overflow-hidden pb-[env(safe-area-inset-bottom)] md:pb-0 animate-in fade-in slide-in-from-bottom-5 duration-200">
-            <div className="flex-shrink-0 bg-blue-600 text-white px-6 py-4 flex items-center justify-between rounded-t-3xl md:rounded-t-none">
-              <h3 className="font-bold text-lg">{editItem ? 'Edit Investment' : 'Add New Investment'}</h3>
-              <button onClick={() => setShowModal(false)} className="p-1 rounded-full bg-white/20 hover:bg-white/30 text-white transition">
-                <X size={18} />
-              </button>
+      <AppModal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        title={editItem ? 'Edit Investment' : 'Add New Investment'}
+        footer={
+          <div className="flex gap-3 w-full">
+            <button
+              onClick={() => setShowModal(false)}
+              className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-medium text-zinc-600 dark:text-zinc-400"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={isPending}
+              className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-60 flex items-center justify-center gap-1 transition-colors"
+            >
+              <Check size={16} />
+              {isPending ? 'Saving…' : 'Save Investment'}
+            </button>
+          </div>
+        }
+      >
+        {formError && (
+          <p className="text-xs text-red-500 bg-red-50 dark:bg-red-950/30 px-3 py-2 rounded-xl mb-4 border border-red-200 dark:border-red-900">
+            {formError}
+          </p>
+        )}
+        {/* Type & Custom Type */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Investment Type</label>
+            <select
+              value={invType}
+              onChange={e => setInvType(e.target.value)}
+              className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {INVESTMENT_TYPES.map(t => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          </div>
+
+          {invType === 'Other' && (
+            <div>
+              <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Custom Type Name</label>
+              <input
+                type="text"
+                placeholder="e.g. Venture Capital"
+                value={customType}
+                onChange={e => setCustomType(e.target.value)}
+                className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+              />
             </div>
+          )}
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-4 text-left">
-              {formError && (
-                <p className="text-xs text-red-500 bg-red-50 dark:bg-red-950/30 px-3 py-2 rounded-xl mb-4 border border-red-200 dark:border-red-900">
-                  {formError}
-                </p>
-              )}
-              {/* Type & Custom Type */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Investment Type</label>
-                  <select
-                    value={invType}
-                    onChange={e => setInvType(e.target.value)}
-                    className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    {INVESTMENT_TYPES.map(t => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {invType === 'Other' && (
-                  <div>
-                    <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Custom Type Name</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Venture Capital"
-                      value={customType}
-                      onChange={e => setCustomType(e.target.value)}
-                      className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                )}
-
-                <div>
-                  <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Broker / Platform</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Zerodha, Groww"
-                    list="brokers-list"
-                    value={broker}
-                    onChange={e => setBroker(e.target.value)}
-                    className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <datalist id="brokers-list">
-                    {BROKERS_SUGGESTIONS.map(b => <option key={b} value={b} />)}
-                  </datalist>
-                </div>
-              </div>
-
-              {/* Investment Name */}
-              <div>
-                <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Investment Name *</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Reliance Industries, Parag Parikh Flexi Cap"
-                  value={invName}
-                  onChange={e => setInvName(e.target.value)}
-                  className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              {/* Account selection & Investment Date */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Deduct From Account</label>
-                  <select
-                    value={accountId}
-                    onChange={e => setAccountId(e.target.value)}
-                    className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">No Account Deduction</option>
-                    {accounts.map(a => (
-                      <option key={a.id} value={a.id}>
-                        {a.name} ({currency}{a.balance.toLocaleString()})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Investment Date</label>
-                  <input
-                    type="date"
-                    value={invDate}
-                    onChange={e => setInvDate(e.target.value)}
-                    className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-
-              {/* Amount, Charges & Taxes */}
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Amount ({currency}) *</label>
-                  <input
-                    type="number"
-                    placeholder="0.00"
-                    value={amount}
-                    onChange={e => setAmount(e.target.value)}
-                    className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Brokerage Fee</label>
-                  <input
-                    type="number"
-                    placeholder="0.00"
-                    value={brokerCharges}
-                    onChange={e => setBrokerCharges(e.target.value)}
-                    className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Taxes / STT</label>
-                  <input
-                    type="number"
-                    placeholder="0.00"
-                    value={tax}
-                    onChange={e => setTax(e.target.value)}
-                    className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                  />
-                </div>
-              </div>
-
-              {/* Units, Purchase Price & Current Price */}
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Units / Qty</label>
-                  <input
-                    type="number"
-                    placeholder="e.g. 10"
-                    value={units}
-                    onChange={e => setUnits(e.target.value)}
-                    className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Purchase Price</label>
-                  <input
-                    type="number"
-                    placeholder="Per unit"
-                    value={purchasePrice}
-                    onChange={e => setPurchasePrice(e.target.value)}
-                    className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Current Price</label>
-                  <input
-                    type="number"
-                    placeholder="Per unit"
-                    value={currentPrice}
-                    onChange={e => setCurrentPrice(e.target.value)}
-                    className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                  />
-                </div>
-              </div>
-
-              {/* Total Current Value & Status */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Total Current Value ({currency})</label>
-                  <input
-                    type="number"
-                    placeholder="Defaults to Amount"
-                    value={currentValue}
-                    onChange={e => setCurrentValue(e.target.value)}
-                    className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none font-bold"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Status</label>
-                  <select
-                    value={status}
-                    onChange={e => setStatus(e.target.value)}
-                    className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="active">Active</option>
-                    <option value="redeemed">Redeemed</option>
-                    <option value="closed">Closed</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Notes & Tags */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Notes</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Long term SIP"
-                    value={notes}
-                    onChange={e => setNotes(e.target.value)}
-                    className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Tags</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. #retirement, #equity"
-                    value={tags}
-                    onChange={e => setTags(e.target.value)}
-                    className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="flex-shrink-0 bg-zinc-50 dark:bg-zinc-800/40 border-t border-zinc-100 dark:border-zinc-800/80 px-6 py-4 flex gap-3">
-              <button
-                onClick={() => setShowModal(false)}
-                className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-medium text-zinc-600 dark:text-zinc-400"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={isPending}
-                className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-60 flex items-center justify-center gap-1 transition-colors"
-              >
-                <Check size={16} />
-                {isPending ? 'Saving…' : 'Save Investment'}
-              </button>
-            </div>
+          <div>
+            <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Broker / Platform</label>
+            <input
+              type="text"
+              placeholder="e.g. Zerodha, Groww"
+              list="brokers-list"
+              value={broker}
+              onChange={e => setBroker(e.target.value)}
+              className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <datalist id="brokers-list">
+              <option value="Zerodha" />
+              <option value="Groww" />
+              <option value="Upstox" />
+              <option value="Angel One" />
+              <option value="Kuvera" />
+              <option value="IndMoney" />
+              <option value="WazirX" />
+              <option value="Binance" />
+              <option value="Physical Gold" />
+              <option value="Bank FD" />
+            </datalist>
           </div>
         </div>
-      )}
+
+        {/* Name / Symbol & Amount */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Asset Name / Symbol</label>
+            <input
+              type="text"
+              placeholder="e.g. NIFTY 50, HDFC, Bitcoin"
+              value={invName}
+              onChange={e => setInvName(e.target.value)}
+              className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Invested Amount ({currency})</label>
+            <input
+              type="number"
+              placeholder="0.00"
+              value={amount}
+              onChange={e => setAmount(e.target.value)}
+              className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none font-bold"
+            />
+          </div>
+        </div>
+
+        {/* Date & Account */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Investment Date</label>
+            <input
+              type="date"
+              value={invDate}
+              onChange={e => setInvDate(e.target.value)}
+              className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Funding Account</label>
+            <select
+              value={accountId}
+              onChange={e => setAccountId(e.target.value)}
+              className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">No account (Does not deduct)</option>
+              {accounts.map(a => (
+                <option key={a.id} value={a.id}>{a.icon} {a.name} ({currency}{a.balance.toFixed(0)})</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Fees, Charges & Taxes */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Brokerage Fee</label>
+            <input
+              type="number"
+              placeholder="0.00"
+              value={brokerCharges}
+              onChange={e => setBrokerCharges(e.target.value)}
+              className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Taxes / STT</label>
+            <input
+              type="number"
+              placeholder="0.00"
+              value={tax}
+              onChange={e => setTax(e.target.value)}
+              className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            />
+          </div>
+        </div>
+
+        {/* Units, Purchase Price & Current Price */}
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Units / Qty</label>
+            <input
+              type="number"
+              placeholder="e.g. 10"
+              value={units}
+              onChange={e => setUnits(e.target.value)}
+              className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Purchase Price</label>
+            <input
+              type="number"
+              placeholder="Per unit"
+              value={purchasePrice}
+              onChange={e => setPurchasePrice(e.target.value)}
+              className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Current Price</label>
+            <input
+              type="number"
+              placeholder="Per unit"
+              value={currentPrice}
+              onChange={e => setCurrentPrice(e.target.value)}
+              className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            />
+          </div>
+        </div>
+
+        {/* Total Current Value & Status */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Total Current Value ({currency})</label>
+            <input
+              type="number"
+              placeholder="Defaults to Amount"
+              value={currentValue}
+              onChange={e => setCurrentValue(e.target.value)}
+              className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none font-bold"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Status</label>
+            <select
+              value={status}
+              onChange={e => setStatus(e.target.value)}
+              className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="active">Active</option>
+              <option value="redeemed">Redeemed</option>
+              <option value="closed">Closed</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Notes & Tags */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Notes</label>
+            <input
+              type="text"
+              placeholder="e.g. Long term SIP"
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Tags</label>
+            <input
+              type="text"
+              placeholder="e.g. #retirement, #equity"
+              value={tags}
+              onChange={e => setTags(e.target.value)}
+              className="w-full mt-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+      </AppModal>
 
       {/* Delete Modal */}
-      {deletingId && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl p-6 max-w-sm w-full text-left">
-            <h3 className="font-bold text-lg mb-2">Delete Investment?</h3>
-            {deleteError ? (
-              <p className="text-xs text-red-500 bg-red-50 dark:bg-red-950/30 px-3 py-2 rounded-xl mb-4 border border-red-200 dark:border-red-900">{deleteError}</p>
-            ) : (
-              <p className="text-zinc-500 text-sm mb-5">Money invested will be returned to your account balance.</p>
-            )}
-            <div className="flex gap-3">
-              <button
-                onClick={() => {
-                  setDeletingId(null);
-                  setDeleteError('');
-                }}
-                className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleDelete(deletingId)}
-                disabled={isPending || !!deleteError}
-                className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-medium disabled:opacity-60 transition-colors"
-              >
-                {isPending ? 'Deleting…' : 'Delete'}
-              </button>
-            </div>
+      <AppModal
+        isOpen={!!deletingId}
+        onClose={() => {
+          setDeletingId(null);
+          setDeleteError('');
+        }}
+        title="Delete Investment?"
+        size="sm"
+        footer={
+          <div className="flex gap-3 w-full">
+            <button
+              onClick={() => {
+                setDeletingId(null);
+                setDeleteError('');
+              }}
+              className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-medium"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => handleDelete(deletingId!)}
+              disabled={isPending || !!deleteError}
+              className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-medium disabled:opacity-60 transition-colors"
+            >
+              {isPending ? 'Deleting…' : 'Delete'}
+            </button>
           </div>
-        </div>
-      )}
+        }
+      >
+        {deleteError ? (
+          <p className="text-xs text-red-500 bg-red-50 dark:bg-red-950/30 px-3 py-2 rounded-xl mb-4 border border-red-200 dark:border-red-900">{deleteError}</p>
+        ) : (
+          <p className="text-zinc-500 text-sm">Money invested will be returned to your account balance.</p>
+        )}
+      </AppModal>
     </div>
   );
 }
