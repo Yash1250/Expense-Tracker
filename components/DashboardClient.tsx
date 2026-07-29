@@ -18,17 +18,6 @@ export default function DashboardClient({ stats }: { stats: any }) {
 
   return (
     <div className="pb-8 space-y-6 bg-slate-50/50 dark:bg-zinc-950/50 min-h-screen animate-in fade-in slide-in-from-bottom-2 duration-300">
-      {/* Mobile header */}
-      <header className="flex justify-between items-center py-3 px-4 sticky top-0 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md z-10 md:hidden border-b border-slate-200 dark:border-zinc-800">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900 dark:text-zinc-100">Dashboard</h1>
-          <p className="text-xs text-slate-500">Personal Finance</p>
-        </div>
-        <div className="w-9 h-9 bg-blue-50 dark:bg-blue-950/50 rounded-full flex items-center justify-center border border-blue-100 dark:border-blue-900">
-          <span className="font-bold text-xs text-blue-600 dark:text-blue-400">YM</span>
-        </div>
-      </header>
-
       {/* Net Worth Hero Card */}
       <section className="group bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm mx-4 md:mx-0 transition-all duration-300 ease-out hover:-translate-y-1 hover:scale-[1.01] hover:shadow-md hover:border-blue-500/80 cursor-pointer">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">

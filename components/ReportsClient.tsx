@@ -57,10 +57,6 @@ export default function ReportsClient({ initialData, currency }: { initialData: 
 
   return (
     <div className="pb-6 space-y-6">
-      <header className="md:hidden sticky top-0 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md z-10 px-4 py-3">
-        <h1 className="text-2xl font-bold">Reports</h1>
-      </header>
-
       {/* Period tabs */}
       <div className="flex bg-zinc-100 dark:bg-zinc-800 p-1 rounded-xl mx-4 md:mx-0 md:max-w-xs">
         {PERIODS.map(p => (
